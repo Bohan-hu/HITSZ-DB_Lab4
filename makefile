@@ -5,13 +5,7 @@ CXX = g++
 AR = ar
 LD = g++
 WINDRES = windres
-
-INC = 
 CFLAGS = -Wall
-RESINC = 
-LIBDIR = 
-LIB = 
-LDFLAGS = 
 
 INC_DEBUG = $(INC)
 CFLAGS_DEBUG = $(CFLAGS) -g
