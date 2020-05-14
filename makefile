@@ -29,14 +29,14 @@ OBJDIR_RELEASE = obj/Release
 DEP_RELEASE = 
 OUT_RELEASE = bin/Release/extmem
 
-OBJ_DEBUG = $(OBJDIR_DEBUG)/extmem.o $(OBJDIR_DEBUG)/test.o
+OBJ_DEBUG = $(OBJDIR_DEBUG)/extmem.o $(OBJDIR_DEBUG)/task2.o
 
-OBJ_RELEASE = $(OBJDIR_RELEASE)/extmem.o $(OBJDIR_RELEASE)/test.o
+OBJ_RELEASE = $(OBJDIR_RELEASE)/extmem.o $(OBJDIR_RELEASE)/task2.o
 
 all: debug release
 
-test: all
-	./bin/Release/extmem
+task2: all
+	./bin/Release/extmem 30 23
 
 clean: clean_debug clean_release
 
@@ -54,8 +54,8 @@ out_debug: before_debug $(OBJ_DEBUG) $(DEP_DEBUG)
 $(OBJDIR_DEBUG)/extmem.o: extmem.c
 	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c extmem.c -o $(OBJDIR_DEBUG)/extmem.o
 
-$(OBJDIR_DEBUG)/test.o: test.c
-	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c test.c -o $(OBJDIR_DEBUG)/test.o
+$(OBJDIR_DEBUG)/task2.o: task2.c
+	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c task2.c -o $(OBJDIR_DEBUG)/task2.o
 
 clean_debug: 
 	rm -f $(OBJ_DEBUG) $(OUT_DEBUG)
@@ -76,8 +76,8 @@ out_release: before_release $(OBJ_RELEASE) $(DEP_RELEASE)
 $(OBJDIR_RELEASE)/extmem.o: extmem.c
 	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c extmem.c -o $(OBJDIR_RELEASE)/extmem.o
 
-$(OBJDIR_RELEASE)/test.o: test.c
-	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c test.c -o $(OBJDIR_RELEASE)/test.o
+$(OBJDIR_RELEASE)/task2.o: task2.c
+	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c task2.c -o $(OBJDIR_RELEASE)/task2.o
 
 clean_release: 
 	rm -f $(OBJ_RELEASE) $(OUT_RELEASE)
