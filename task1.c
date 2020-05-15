@@ -36,7 +36,7 @@ int main(int argc, char** argv)
     for (blk_cnt = 0; blk_cnt < 48; blk_cnt++) {
         printf("读入数据块 %d\n", blkNum);
         for (i = 0; i < 7; i++) {
-            t = getTuple(blk, i);
+            t = getTuple_str(blk, i);
             X=t.a;
             Y=t.b;
             // printf("%d,%d",X,Y);

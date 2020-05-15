@@ -36,7 +36,7 @@ OBJ_RELEASE = $(OBJDIR_RELEASE)/extmem.o $(OBJDIR_RELEASE)/task2.o
 all: debug release
 
 task2: all
-	./bin/Release/extmem 30 23
+	./bin/Release/extmem
 
 clean: clean_debug clean_release
 

@@ -33,8 +33,8 @@ Tuple getTuple_str(unsigned char* blk, int tuple_num){
 
 Tuple getTuple_t(unsigned char* blk, int tuple_num){
     Tuple t;
-    t.a = (int)(*(blk+tuple_num*8));
-    t.b = (int)(*(blk+tuple_num*8+4));
+    t.a = *((int*)(blk+tuple_num*8));
+    t.b = *((int*)(blk+tuple_num*8+4));
     return t;
 }
 
@@ -44,8 +44,8 @@ void setTuple_str(unsigned char* blk, int offset, Tuple t){
 }
 
 void setTuple_int(unsigned char* blk, int offset, Tuple t){
-    int2str(blk+8*offset, t.a);
-    int2str(blk+8*offset+4, t.b);
+    *(int*)(blk+8*offset) =t.a;
+    *(int*)(blk+8*offset+4) = t.b;
 }
 
 void setTuple_t(unsigned char* blk, int offset, Tuple t){
@@ -62,6 +62,6 @@ void showBlock_str(unsigned char* blk){
 
 void showBlock_int(unsigned char* blk){
     for(int i = 0;i<8;i++){
-        printf("(%d,%d)\n", (int)(*(blk+i*8)),(int)(*(blk+i*8+4)));
+        printf("(%d,%d)\n", *(int*)(blk+i*8),*((int*)(blk+i*8+4)));
     }
 }
