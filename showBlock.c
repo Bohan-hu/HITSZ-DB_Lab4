@@ -40,7 +40,7 @@ int main(int argc, char** argv)
     Tuple t;
     for (blk_cnt = 1; blk_cnt <= 16; blk_cnt++) {
         if (blk_cnt < 16) {
-            blk = readBlockFromDisk(blk_cnt+48, &buf);
+            blk = readBlockFromDisk(blk_cnt+999, &buf);
         }
         printf("读入数据块 %d\n", blk_cnt);
         showBlock_str(blk);
