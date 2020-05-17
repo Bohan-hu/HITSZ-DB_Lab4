@@ -1,6 +1,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#ifndef TUPLE_H
+#define TUPLE_H
 typedef struct _tuple{
     int a;
     int b;
@@ -65,3 +67,5 @@ void showBlock_int(unsigned char* blk){
         printf("(%d,%d)\n", *(int*)(blk+i*8),*((int*)(blk+i*8+4)));
     }
 }
+
+#endif

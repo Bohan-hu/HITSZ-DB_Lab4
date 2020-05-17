@@ -42,29 +42,23 @@ int main(int argc, char** argv)
         if (blk_cnt < 16) {
             blk = readBlockFromDisk(blk_cnt, &buf);
         }
-        printf("读入数据块 %d\n", blk_cnt);
         // Convert the tuple from str to int
         for (i = 0; i < 7; i++) {
             t = getTuple_str(blk, i);
             setTuple_int(blk, i, t);
         }
-        // showBlock_int(blk);
         // Sort the tuple
         qsort(blk, 7, sizeof(Tuple), cmpTule);
-        // printf("------\n");
         for (int offset = 0; offset < 7; offset++) {
             setTuple_str(blk, offset, getTuple_t(blk, offset));
         }
-        // printf("after_sort\n");
-        // showBlock_str(blk);
+        // Write the sorted buffer back 
         if (writeBlockToDisk(blk, 48 + blk_cnt, &buf) != 0) {
             perror("Writing Block Failed!\n");
             return -1;
         }
-        // TODO: Write back to the disk
         // Free the allocated block
-        freeBlockInBuffer(blk, &buf);
-        // Read the next block
+        // freeBlockInBuffer(blk, &buf);
     }
 
     // For relationship R, the first time Merge
@@ -74,72 +68,71 @@ int main(int argc, char** argv)
     2 Blocks for compare buffer
     2 Blocks for output buffer
     */
-
-    unsigned char* subset_buffers_ptr[4];
-    Tuple* compare_buffer;
-    Tuple* output_buffer;
-    int output_buffer_cnt = 0;
-    // Initialize subset buffers & compare buffer;
-    compare_buffer = (Tuple*)getNewBlockInBuffer(&buf);
-    output_buffer = (Tuple*)getNewBlockInBuffer(&buf);
-    int start_block = 48;
-    int stride = 1;
-    int subset_current_ptr[4] = { 0 };
-    for (int i = 0; i < 4; i++) {
-        // Read the block to the buffer
-        subset_buffers_ptr[i] = readBlockFromDisk(start_block + i, &buf);
-        if (!subset_buffers_ptr) {
-            perror("Error reading block!");
-            return -1;
-        }
-        // Convert the string to int
-        for (int offset = 0; offset < 7; offset++) {
-            setTuple_int(subset_buffers_ptr[i], offset, getTuple_str(subset_buffers_ptr[i], offset));
-        }
-        compare_buffer[i] = getTuple_t(subset_buffers_ptr[i], subset_current_ptr[i]++);
-    }
-
-    for (int i = 0; i < 4; i++) {
-        printf("(%d, %d)\n=====\n", compare_buffer[i].a, compare_buffer[i].b);
-    }
-    // Load the blocks into the buffer
-    int output_blk_cnt = 0;
-    while (output_blk_cnt < 4) {
-        // Select the min
-        int min_pos = 0;
+    for (int start_block = 54; start_block < 64; start_block += 4) {
+        unsigned char* subset_buffers_ptr[4];
+        Tuple* compare_buffer;
+        Tuple* output_buffer;
+        int output_buffer_cnt = 0;
+        // Initialize subset buffers & compare buffer;
+        compare_buffer = (Tuple*)getNewBlockInBuffer(&buf);
+        output_buffer = (Tuple*)getNewBlockInBuffer(&buf);
+        // int start_block = 48;
+        int stride = 1;
+        int subset_current_ptr[4] = { 0 };
         for (int i = 0; i < 4; i++) {
-            if (compare_buffer[i].a < compare_buffer[min_pos].a) {
-                min_pos = i;
+            // Read the block to the buffer
+            subset_buffers_ptr[i] = readBlockFromDisk(start_block + i, &buf);
+            // subset_buffers_ptr[i] = 0;
+            if (!subset_buffers_ptr[i]) {
+                perror("Error reading block!");
+                return -1;
             }
-        }
-        printf("min_pos=%d\n", min_pos);
-        printf("From block %d, value=(%d,%d)\n", min_pos+1 , compare_buffer[min_pos].a, compare_buffer[min_pos].b);
-        // Send the min to the output buffer
-        if (output_buffer_cnt < 7) {
-            output_buffer[output_buffer_cnt++] = compare_buffer[min_pos];
-        } else { // the buffer is full, write to disk
-            printf("the buffer is full\n");
-            // Reset the pointer
-            output_buffer_cnt = 0;
-            // Sort the buffer
-            qsort(output_buffer, 7, sizeof(Tuple), cmpTule);
-            // Format the string
-            for(int offset =0; offset < 7; offset++){
-                setTuple_str((unsigned char*)output_buffer,offset, getTuple_t(output_buffer,offset));
+            // Convert the string to int
+            for (int offset = 0; offset < 7; offset++) {
+                setTuple_int(subset_buffers_ptr[i], offset, getTuple_str(subset_buffers_ptr[i], offset));
             }
-            writeBlockToDisk(output_buffer, 1000+output_blk_cnt, &buf);
-            output_blk_cnt ++;
-            output_buffer = getNewBlockInBuffer(&buf);
-            output_buffer[output_buffer_cnt++] = compare_buffer[min_pos];
+            compare_buffer[i] = getTuple_t(subset_buffers_ptr[i], subset_current_ptr[i]++);
         }
-        // Send a new element to the buffer
-        if (subset_current_ptr[min_pos] < 7) {
-            compare_buffer[min_pos] = getTuple_t(subset_buffers_ptr[min_pos], subset_current_ptr[min_pos]++);
-        } else { // No more elements, give a special tag
-            compare_buffer[min_pos].a = 99999;
-        }
-    }
 
+        // Load the blocks into the buffer
+        int output_blk_cnt = 0;
+        while (output_blk_cnt < 4) {
+            // Select the min
+            int min_pos = 0;
+            for (int i = 0; i < 4; i++) {
+                if (compare_buffer[i].a < compare_buffer[min_pos].a) {
+                    min_pos = i;
+                }
+            }
+            printf("min_pos=%d\n", min_pos);
+            printf("From block %d, value=(%d,%d)\n", min_pos + 1, compare_buffer[min_pos].a, compare_buffer[min_pos].b);
+            // Send the min to the output buffer
+            if (output_buffer_cnt < 7) {
+                output_buffer[output_buffer_cnt++] = compare_buffer[min_pos];
+            } else { // the buffer is full, write to disk
+                printf("the buffer is full\n");
+                // Reset the pointer
+                output_buffer_cnt = 0;
+                // Sort the buffer
+                qsort(output_buffer, 7, sizeof(Tuple), cmpTule);
+                // Format the string
+                for (int offset = 0; offset < 7; offset++) {
+                    setTuple_str((unsigned char*)output_buffer, offset, getTuple_t((unsigned char*)output_buffer, offset));
+                }
+                writeBlockToDisk((unsigned char*)output_buffer, 1000 + start_block + output_blk_cnt, &buf);
+                output_blk_cnt++;
+                output_buffer = (Tuple*)getNewBlockInBuffer(&buf);
+                output_buffer[output_buffer_cnt++] = compare_buffer[min_pos];
+            }
+            // Send a new element to the buffer
+            if (subset_current_ptr[min_pos] < 7) {
+                compare_buffer[min_pos] = getTuple_t(subset_buffers_ptr[min_pos], subset_current_ptr[min_pos]++);
+            } else { // No more elements, give a special tag
+                compare_buffer[min_pos].a = 99999;
+            }
+        }
+        freeBlockInBuffer((unsigned char*)compare_buffer, &buf);
+    }
 
     // unsigned char* subset_buffers_ptr[4];
     // Tuple* compare_buffer;
@@ -209,7 +202,7 @@ int main(int argc, char** argv)
     //         printf("Read a new block!\n");
     //         for (int offset = 0; offset < 7; offset++) {
     //             setTuple_int(subset_buffers_ptr[min_pos], offset, getTuple_str(subset_buffers_ptr[min_pos], offset));
-    //         } 
+    //         }
     //         compare_buffer[min_pos] = getTuple_t(subset_buffers_ptr[min_pos], 0);
     //     } else { // No more elements, give a special tag
     //         compare_buffer[min_pos].a = 99999;
