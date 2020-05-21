@@ -45,6 +45,6 @@ int dropBlockOnDisk(unsigned int addr);
 unsigned char *readBlockFromDisk(unsigned int addr, Buffer *buf);
 
 /* Read a block in the buffer to the hard disk by the address of the block. */
-int writeBlockToDisk(unsigned char *blkPtr, unsigned int addr, Buffer *buf);
+int writeBlockToDisk(unsigned char **blkPtr, unsigned int addr, Buffer *buf);
 
 #endif // EXTMEM_H

@@ -130,26 +130,25 @@ unsigned char *readBlockFromDisk(unsigned int addr, Buffer *buf)
     return blkPtr;
 }
 
-int writeBlockToDisk(unsigned char *blkPtr, unsigned int addr, Buffer *buf)
-{
+int writeBlockToDisk(unsigned char **blkPtr, unsigned int addr, Buffer *buf) {
     char filename[40];
     unsigned char *bytePtr;
 
     sprintf(filename, "../data/%d.blk", addr);
     FILE *fp = fopen(filename, "w");
 
-    if (!fp)
-    {
+    if (!fp) {
         perror("Writing Block Failed!\n");
         return -1;
     }
 
-    for (bytePtr = blkPtr; bytePtr < blkPtr + buf->blkSize; bytePtr++)
-        fputc((int)(*bytePtr), fp);
+    for (bytePtr = *blkPtr; bytePtr < *blkPtr + buf->blkSize; bytePtr++)
+        fputc((int) (*bytePtr), fp);
 
     fclose(fp);
-    *(blkPtr - 1) = BLOCK_AVAILABLE;
+    *(*blkPtr - 1) = BLOCK_AVAILABLE;
     buf->numFreeBlk++;
     buf->numIO++;
+    *blkPtr = NULL;
     return 0;
 }

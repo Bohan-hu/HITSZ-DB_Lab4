@@ -62,9 +62,28 @@ void showBlock_str(unsigned char* blk){
     }
 }
 
-void showBlock_int(unsigned char* blk){
-    for(int i = 0;i<8;i++){
-        printf("(%d,%d)\n", *(int*)(blk+i*8),*((int*)(blk+i*8+4)));
+void showBlock_int(unsigned char *blk) {
+    for (int i = 0; i < 8; i++) {
+        printf("(%d,%d)\n", *(int *) (blk + i * 8), *((int *) (blk + i * 8 + 4)));
+    }
+}
+
+//void showIndex(int start_blk_num){
+//    for(int i = 0;i<8;i++){
+//        printf("(%d,%d)\n", *(int*)(blk+i*8),*((int*)(blk+i*8+4)));
+//    }
+//}
+
+void convertTuple_2int(Tuple *t, int num) {
+    for (int offset = 0; offset < num; offset++) {
+        setTuple_int((unsigned char *) t, offset, getTuple_str((unsigned char *) t, offset));
+    }
+}
+
+void convertTuple_2str(Tuple *t, int num) {
+    for (int offset = 0; offset < num; offset++) {
+        setTuple_str((unsigned char *) t, offset,
+                     getTuple_t((unsigned char *) t, offset));
     }
 }
 

@@ -9,6 +9,18 @@ int cmpTule(const void *p1, const void *p2) {
     return t1.a - t2.a;
 }
 
+void showBlocks(int start, int nums, Buffer *buf) {
+    int blk_cnt;
+    unsigned char *blk;
+    for (blk_cnt = start; blk_cnt < start + nums; blk_cnt++) {
+        blk = readBlockFromDisk(blk_cnt, buf);
+        printf("读入数据块 %d\n", blk_cnt);
+        showBlock_str(blk);
+        freeBlockInBuffer(blk, buf);
+        printf("-------------\n");
+    }
+}
+
 int sort_8_block(int block_num, int dst_block_num, Buffer *buf) {
     unsigned char *blk[8];
     for (int i = 0; i < 8; i++) {
@@ -21,7 +33,6 @@ int sort_8_block(int block_num, int dst_block_num, Buffer *buf) {
     }
 
     Tuple temp[56];
-    printf("Before Sort:\n");
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 7; j++) {
             temp[i * 7 + j] = getTuple_t(blk[i], j);
@@ -34,7 +45,7 @@ int sort_8_block(int block_num, int dst_block_num, Buffer *buf) {
             Tuple t = temp[i * 7 + j];
             setTuple_str(blk[i], j, t);
         }
-        if (writeBlockToDisk(blk[i], dst_block_num + i, buf) != 0) {
+        if (writeBlockToDisk(&blk[i], dst_block_num + i, buf) != 0) {
             perror("Writing Block Failed!\n");
             return -1;
         }
@@ -100,9 +111,7 @@ void merge_groups(int start_block_num, int num_groups, int dst_start_block_num, 
                 setTuple_str((unsigned char *) output_buffer, offset,
                              getTuple_t((unsigned char *) output_buffer, offset));
             }
-            writeBlockToDisk((unsigned char *) output_buffer, dst_start_block_num + output_blk_cnt, buf);
-
-
+            writeBlockToDisk((unsigned char **) &output_buffer, dst_start_block_num + output_blk_cnt, buf);
             output_blk_cnt++;
             // get a new output buffer
             output_buffer = (Tuple *) getNewBlockInBuffer(buf);
@@ -140,6 +149,32 @@ void merge_groups(int start_block_num, int num_groups, int dst_start_block_num, 
     freeBlockInBuffer((unsigned char *) compare_buffer, buf);
 }
 
+int makeIndex(int start_block, int num_blocks, int dst_block, Buffer *buf) {
+    int blk_cnt;
+    unsigned char *blk;
+    Tuple *output_blk = (Tuple *) getNewBlockInBuffer(buf);
+    int output_blk_pos = 0;
+    int output_blk_cnt = 0;
+    Tuple t;
+    for (blk_cnt = start_block; blk_cnt < start_block + num_blocks; blk_cnt++) {
+        blk = readBlockFromDisk(blk_cnt, buf);
+        t.a = getTuple_str(blk, 0).a;
+        t.b = blk_cnt;
+        output_blk[output_blk_pos++] = t;
+        if (output_blk_pos == 8) {
+            // Write back to disk
+            output_blk_pos = 0;
+            writeBlockToDisk((unsigned char **) &output_blk, dst_block + output_blk_cnt, buf);
+            output_blk_cnt++;
+            output_blk = (Tuple *) getNewBlockInBuffer(buf);
+        }
+        freeBlockInBuffer(blk, buf);
+    }
+
+    return dst_block + output_blk_cnt;
+}
+
+
 int main(int argc, char **argv) {
     Buffer buf; /* A buffer */
     int i = 0;
@@ -160,12 +195,7 @@ int main(int argc, char **argv) {
     sort_8_block(17 + 24, dest_blk + 24, &buf);
     merge_groups(dest_blk, 4, 216, &buf);
 
-    int blk_cnt;
-    unsigned char *blk;
-    for (blk_cnt = 1; blk_cnt <= 32; blk_cnt++) {
-        blk = readBlockFromDisk(blk_cnt + 16, &buf);
-        printf("读入数据块 %d\n", blk_cnt);
-        showBlock_str(blk);
-        freeBlockInBuffer(blk, &buf);
-    }
+    showBlocks(200, 48, &buf);
+    return 0;
+
 }
