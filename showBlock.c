@@ -44,10 +44,7 @@ int main(int argc, char** argv)
         }
         printf("读入数据块 %d\n", blk_cnt);
         showBlock_str(blk);
-        // TODO: Write back to the disk
-        // Free the allocated block
         freeBlockInBuffer(blk, &buf);
-        // Read the next block
     }
 
     printf("\n");

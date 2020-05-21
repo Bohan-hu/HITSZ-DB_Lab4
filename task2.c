@@ -14,25 +14,36 @@ int cmpTule(const void *p1, const void *p2) {
 // Number of Blocks in group
 //
 
-int sort_block(int block_num, int dst_block_num, Buffer *buf) {
-    unsigned char *blk;
-    blk = readBlockFromDisk(block_num, buf);
-    // Convert the tuple from str to int
-    Tuple t;
+int sort_8_block(int block_num, int dst_block_num, Buffer *buf) {
+    unsigned char *blk[8];
     for (int i = 0; i < 7; i++) {
-        t = getTuple_str(blk, i);
-        setTuple_int(blk, i, t);
+        blk[i] = readBlockFromDisk(block_num, buf);
+        Tuple t;
+        for (int j = 0; j < 7; j++) {
+            t = getTuple_str(blk[i], j);
+            setTuple_int(blk[i], j, t);
+        }
     }
-    // Sort the tuple
-    qsort(blk, 7, sizeof(Tuple), cmpTule);
-    for (int offset = 0; offset < 7; offset++) {
-        setTuple_str(blk, offset, getTuple_t(blk, offset));
+
+    Tuple temp[56];
+    for (int i = 0; i < 7; i++) {
+        for (int j = 0; j < 6; j++) {
+            temp[i * 7 + j] = getTuple_t(blk[i], j);
+        }
     }
-    // Write the sorted buffer back
-    if (writeBlockToDisk(blk, dst_block_num, buf) != 0) {
-        perror("Writing Block Failed!\n");
-        return -1;
+    qsort(temp, 56, sizeof(Tuple), cmpTule);
+
+    for (int i = 0; i < 7; i++) {
+        for (int j = 0; j < 6; j++) {
+            Tuple t = temp[i * 7 + j];
+            setTuple_str(blk[i], j, t);
+        }
+        if (writeBlockToDisk(blk[i], dst_block_num + i, buf) != 0) {
+            perror("Writing Block Failed!\n");
+            return -1;
+        }
     }
+
     return 0;
 }
 
@@ -94,7 +105,7 @@ void merge_blocks(int start_block_num, int num_groups, int blocks_per_group, int
             output_buffer = (Tuple *) getNewBlockInBuffer(buf);
         }
         // Send a new element to compare buffer
-
+        compare_buffer[min_pos] = getTuple_t(subset_buffers_ptr[min_pos],[min_pos]++);
         // Reach the end of the block?
         if (subset_buffer_read_pos[min_pos] == 7) {
             subset_buffer_read_pos[min_pos] = 0;
