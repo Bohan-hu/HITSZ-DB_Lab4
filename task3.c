@@ -46,7 +46,6 @@ void merge_groups(int start_block_num, int num_groups, int dst_start_block_num, 
     int *group_start_block_num = malloc(sizeof(int) * (num_groups + 1));
     for (int i = 0; i < num_groups + 1; i++) {
         group_start_block_num[i] = start_block_num + 8 * i;
-//        printf("Group %d starts from blk:%d\n", i, group_start_block_num[i]);
     }
     // 初始化比较缓冲区和输出缓冲区
     Tuple *compare_buffer = (Tuple *) getNewBlockInBuffer(buf);
@@ -65,7 +64,6 @@ void merge_groups(int start_block_num, int num_groups, int dst_start_block_num, 
     for (int i = 0; i < num_groups; i++) {
         // Read the block to the buffer
         subset_buffers_ptr[i] = readBlockFromDisk(group_start_block_num[i], buf);
-        // subset_buffers_ptr[i] = 0;
         if (!subset_buffers_ptr[i]) {
             perror("Error reading block!");
             return;
@@ -85,9 +83,6 @@ void merge_groups(int start_block_num, int num_groups, int dst_start_block_num, 
                 min_pos = i;
             }
         }
-        printf("Select the element from group %d, (%d, %d)), Block %d, next one is at %d\n", min_pos,
-               compare_buffer[min_pos].a, compare_buffer[min_pos].b, group_read_blk_num[min_pos],
-               subset_buffer_read_pos[min_pos]);
         if (compare_buffer[min_pos].a == 99999) {    // Reach the end....
             break;
         }
@@ -97,17 +92,18 @@ void merge_groups(int start_block_num, int num_groups, int dst_start_block_num, 
         if (output_buffer_cnt == 7) { // Write the buffer back to the disk
             output_buffer_cnt = 0;
             qsort(output_buffer, 7, sizeof(Tuple), cmpTule);
-            for (int i = 0; i < 7; i++) {
-                printf("(%d,%d)\n", output_buffer[i].a, output_buffer[i].b);
-            }
-            for (int offset = 0; offset < 7; offset++) {
+            Tuple t;
+            t.a = dst_start_block_num + output_blk_cnt + 1;
+            t.b = 0;
+            output_buffer[7] = t;
+            for (int offset = 0; offset < 8; offset++) {
                 setTuple_str((unsigned char *) output_buffer, offset,
                              getTuple_t((unsigned char *) output_buffer, offset));
             }
             writeBlockToDisk((unsigned char *) output_buffer, dst_start_block_num + output_blk_cnt, buf);
-            output_blk_cnt++;
-            printf("Output buffer is full\n");
 
+
+            output_blk_cnt++;
             // get a new output buffer
             output_buffer = (Tuple *) getNewBlockInBuffer(buf);
         }
@@ -115,17 +111,13 @@ void merge_groups(int start_block_num, int num_groups, int dst_start_block_num, 
         // Reach the end of the block?
         if (subset_buffer_read_pos[min_pos] < 7) {
             compare_buffer[min_pos] = getTuple_t(subset_buffers_ptr[min_pos], subset_buffer_read_pos[min_pos]);
-            //        printf("Send from group %d, pos %d\n", min_pos, subset_buffer_read_pos[min_pos]);
             subset_buffer_read_pos[min_pos]++;
         } else {
-//            printf("Read a new block!\n");
             subset_buffer_read_pos[min_pos] = 0;
             group_read_blk_num[min_pos]++;
-//            printf("Reading block %d, upper limit %d\n", group_read_blk_num[min_pos], group_start_block_num[min_pos + 1]);
             // See if a new block can be loaded
             if (group_read_blk_num[min_pos] < group_start_block_num[min_pos + 1]) {
                 // Load a new block
-//                printf("Group %d read new block: %d\n", min_pos, group_read_blk_num[min_pos]);
                 freeBlockInBuffer(subset_buffers_ptr[min_pos], buf);
                 subset_buffers_ptr[min_pos] = readBlockFromDisk(group_read_blk_num[min_pos], buf);
                 for (int offset = 0; offset < 7; offset++) {
@@ -140,6 +132,12 @@ void merge_groups(int start_block_num, int num_groups, int dst_start_block_num, 
             }
         }
     }
+    // Do the cleanup
+    for (int i = 0; i < num_groups; i++) {
+        freeBlockInBuffer((unsigned char *) subset_buffers_ptr[i], buf);
+    }
+    freeBlockInBuffer((unsigned char *) output_buffer, buf);
+    freeBlockInBuffer((unsigned char *) compare_buffer, buf);
 }
 
 int main(int argc, char **argv) {
@@ -151,15 +149,21 @@ int main(int argc, char **argv) {
         return -1;
     }
     // Sort the block(8 blocks per group)
-    sort_8_block(1, 100, &buf);
-    sort_8_block(1 + 8, 100 + 8, &buf);
-    merge_groups(100, 2, 200, &buf);
+    int dest_blk = 100;
+    sort_8_block(1, dest_blk, &buf);
+    sort_8_block(1 + 8, dest_blk + 8, &buf);
+    merge_groups(dest_blk, 2, 200, &buf);
+    dest_blk = 116;
+    sort_8_block(17, dest_blk, &buf);
+    sort_8_block(17 + 8, dest_blk + 8, &buf);
+    sort_8_block(17 + 16, dest_blk + 16, &buf);
+    sort_8_block(17 + 24, dest_blk + 24, &buf);
+    merge_groups(dest_blk, 4, 216, &buf);
+
     int blk_cnt;
     unsigned char *blk;
-    for (blk_cnt = 1; blk_cnt <= 16; blk_cnt++) {
-        if (blk_cnt < 16) {
-            blk = readBlockFromDisk(blk_cnt + 199, &buf);
-        }
+    for (blk_cnt = 1; blk_cnt <= 32; blk_cnt++) {
+        blk = readBlockFromDisk(blk_cnt + 16, &buf);
         printf("读入数据块 %d\n", blk_cnt);
         showBlock_str(blk);
         freeBlockInBuffer(blk, &buf);
