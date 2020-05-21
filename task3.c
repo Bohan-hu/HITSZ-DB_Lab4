@@ -53,7 +53,7 @@ int sort_8_block(int block_num, int dst_block_num, Buffer *buf) {
     return 0;
 }
 
-void merge_groups(int start_block_num, int num_groups, int dst_start_block_num, Buffer *buf) {
+void merge_groups(int start_block_num, int num_groups, int dst_start_block_num, Buffer *buf, int deduplicate) {
     int *group_start_block_num = malloc(sizeof(int) * (num_groups + 1));
     for (int i = 0; i < num_groups + 1; i++) {
         group_start_block_num[i] = start_block_num + 8 * i;
@@ -98,7 +98,21 @@ void merge_groups(int start_block_num, int num_groups, int dst_start_block_num, 
             break;
         }
         // Send the element at the min_pos to output buffer
-        output_buffer[output_buffer_cnt++] = compare_buffer[min_pos];
+        if (deduplicate) {
+            int flag = 0;
+            // search the output buffer for the same element
+            for (int k = 0; k < output_buffer_cnt; k++) {
+                if (output_buffer[k].a == compare_buffer[min_pos].a) {
+                    flag = 1;
+                    break;
+                }
+            }
+            if (!flag) {
+                output_buffer[output_buffer_cnt++] = compare_buffer[min_pos];
+            }
+        } else {
+            output_buffer[output_buffer_cnt++] = compare_buffer[min_pos];
+        }
         // Output buffer is full?
         if (output_buffer_cnt == 7) { // Write the buffer back to the disk
             output_buffer_cnt = 0;
@@ -231,13 +245,13 @@ int main(int argc, char **argv) {
     int dest_blk = 100;
     sort_8_block(1, dest_blk, &buf);
     sort_8_block(1 + 8, dest_blk + 8, &buf);
-    merge_groups(dest_blk, 2, 200, &buf);
+    merge_groups(dest_blk, 2, 200, &buf, 0);
     dest_blk = 116;
     sort_8_block(17, dest_blk, &buf);
     sort_8_block(17 + 8, dest_blk + 8, &buf);
     sort_8_block(17 + 16, dest_blk + 16, &buf);
     sort_8_block(17 + 24, dest_blk + 24, &buf);
-    merge_groups(dest_blk, 4, 216, &buf);
+    merge_groups(dest_blk, 4, 216, &buf, 0);
 
     showBlocks(200, 48, &buf);
     int num_index_blocks;
