@@ -157,6 +157,9 @@ int makeIndex(int start_block, int num_blocks, int dst_block, Buffer *buf) {
     int output_blk_cnt = 0;
     Tuple t;
     for (blk_cnt = start_block; blk_cnt < start_block + num_blocks; blk_cnt++) {
+        if (output_blk == NULL) {
+            output_blk = (Tuple *) getNewBlockInBuffer(buf);
+        }
         blk = readBlockFromDisk(blk_cnt, buf);
         t.a = getTuple_str(blk, 0).a;
         t.b = blk_cnt;
@@ -166,12 +169,13 @@ int makeIndex(int start_block, int num_blocks, int dst_block, Buffer *buf) {
             output_blk_pos = 0;
             writeBlockToDisk((unsigned char **) &output_blk, dst_block + output_blk_cnt, buf);
             output_blk_cnt++;
-            output_blk = (Tuple *) getNewBlockInBuffer(buf);
         }
         freeBlockInBuffer(blk, buf);
     }
-
-    return dst_block + output_blk_cnt;
+    if (output_blk != NULL) {
+        writeBlockToDisk((unsigned char **) &output_blk, dst_block + output_blk_cnt, buf);
+    }
+    return output_blk_cnt;
 }
 
 
@@ -196,6 +200,10 @@ int main(int argc, char **argv) {
     merge_groups(dest_blk, 4, 216, &buf);
 
     showBlocks(200, 48, &buf);
+    int num_index_blocks;
+    num_index_blocks = makeIndex(200, 16, 300, &buf);
+    showIndex(300, num_index_blocks, &buf);
+
     return 0;
 
 }

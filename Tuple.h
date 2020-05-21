@@ -1,16 +1,18 @@
+#ifndef TUPLE_H
+#define TUPLE_H
 
 #include <stdio.h>
 #include <stdlib.h>
-#ifndef TUPLE_H
-#define TUPLE_H
-typedef struct _tuple{
+#include "extmem.h"
+
+typedef struct _tuple {
     int a;
     int b;
 } Tuple;
 
-void int2str(unsigned char* dst, int a){
+void int2str(unsigned char *dst, int a) {
     int base = 1000;
-    for(int i=0;i<4;i++){
+    for (int i = 0; i < 4; i++) {
         dst[i] = a / base + '0';
         a %= base;
         base /= 10;
@@ -68,22 +70,14 @@ void showBlock_int(unsigned char *blk) {
     }
 }
 
-//void showIndex(int start_blk_num){
-//    for(int i = 0;i<8;i++){
-//        printf("(%d,%d)\n", *(int*)(blk+i*8),*((int*)(blk+i*8+4)));
-//    }
-//}
 
-void convertTuple_2int(Tuple *t, int num) {
-    for (int offset = 0; offset < num; offset++) {
-        setTuple_int((unsigned char *) t, offset, getTuple_str((unsigned char *) t, offset));
-    }
-}
+void showIndex(int start_blk_num, int num_blocks, Buffer *buf) {
+    unsigned char *blk;
+    for (int i = start_blk_num; i < start_blk_num + num_blocks; i++) {
+        blk = readBlockFromDisk(i, buf);
+        showBlock_int(blk);
+        printf("---------\n");
 
-void convertTuple_2str(Tuple *t, int num) {
-    for (int offset = 0; offset < num; offset++) {
-        setTuple_str((unsigned char *) t, offset,
-                     getTuple_t((unsigned char *) t, offset));
     }
 }
 
