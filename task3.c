@@ -178,6 +178,46 @@ int makeIndex(int start_block, int num_blocks, int dst_block, Buffer *buf) {
     return output_blk_cnt;
 }
 
+int locateBlkbyIndex(int search_key, int index_start_num, int num_index_blocks, Buffer *buf) {
+    // 遍历index，找到满足key的最小值
+    unsigned char *blk;
+    int search_continue = 1;
+    int blk_num;
+    for (int blk_cnt = index_start_num; blk_cnt < index_start_num + num_index_blocks && search_continue; blk_cnt++) {
+        blk = readBlockFromDisk(blk_cnt, buf);
+        for (int i = 0; i < 8; i++) {
+            if (((Tuple *) blk)[i].a >= search_key) {
+                blk_num = ((Tuple *) blk)[i].b;
+                search_continue = 0;
+                break;
+            }
+        }
+    }
+    return blk_num - 1;
+}
+
+void searchFromBlock(int value, int start_block, Buffer *buf) {
+    unsigned char *blk;
+    int current_blk = start_block;
+    int search_flag = 1;
+    while (search_flag) {
+        blk = readBlockFromDisk(current_blk, buf);
+        for (int offset = 0; offset < 7; offset++) {
+            setTuple_int(blk, offset,
+                         getTuple_str(blk, offset));
+            if (((Tuple *) blk)[offset].a == value) {
+                printf("(%d, %d)\n", ((Tuple *) blk)[offset].a, ((Tuple *) blk)[offset].b);
+            }
+            if (((Tuple *) blk)[offset].a > value) {
+                search_flag = 0;
+                freeBlockInBuffer(blk, buf);
+                break;
+            }
+        }
+        current_blk++;
+        freeBlockInBuffer(blk, buf);
+    }
+}
 
 int main(int argc, char **argv) {
     Buffer buf; /* A buffer */
@@ -203,7 +243,8 @@ int main(int argc, char **argv) {
     int num_index_blocks;
     num_index_blocks = makeIndex(200, 16, 300, &buf);
     showIndex(300, num_index_blocks, &buf);
-
+    int start_blk;
+    start_blk = locateBlkbyIndex(30, 300, num_index_blocks, &buf);
+    searchFromBlock(30, start_blk, &buf);
     return 0;
-
 }
