@@ -77,7 +77,7 @@ void showIndex(int start_blk_num, int num_blocks, Buffer *buf) {
         blk = readBlockFromDisk(i, buf);
         showBlock_int(blk);
         printf("---------\n");
-
+        freeBlockInBuffer(blk, buf);
     }
 }
 

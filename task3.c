@@ -53,7 +53,7 @@ int sort_8_block(int block_num, int dst_block_num, Buffer *buf) {
     return 0;
 }
 
-void merge_groups(int start_block_num, int num_groups, int dst_start_block_num, Buffer *buf, int deduplicate) {
+int merge_groups(int start_block_num, int num_groups, int dst_start_block_num, Buffer *buf, int deduplicate) {
     int *group_start_block_num = malloc(sizeof(int) * (num_groups + 1));
     for (int i = 0; i < num_groups + 1; i++) {
         group_start_block_num[i] = start_block_num + 8 * i;
@@ -77,7 +77,7 @@ void merge_groups(int start_block_num, int num_groups, int dst_start_block_num, 
         subset_buffers_ptr[i] = readBlockFromDisk(group_start_block_num[i], buf);
         if (!subset_buffers_ptr[i]) {
             perror("Error reading block!");
-            return;
+            return -1;
         }
         // Convert the string to int
         for (int offset = 0; offset < 7; offset++) {
@@ -94,21 +94,31 @@ void merge_groups(int start_block_num, int num_groups, int dst_start_block_num, 
                 min_pos = i;
             }
         }
+//        printf("Select from group %d, ", min_pos);
+//        printf("(%d, %d)\n", compare_buffer[min_pos].a, compare_buffer[min_pos].b);
         if (compare_buffer[min_pos].a == 99999) {    // Reach the end....
             break;
         }
         // Send the element at the min_pos to output buffer
+        if (output_buffer == NULL) {
+            output_buffer = (Tuple *) getNewBlockInBuffer(buf);
+        }
+        int last_blk_key;
         if (deduplicate) {
             int flag = 0;
             // search the output buffer for the same element
             for (int k = 0; k < output_buffer_cnt; k++) {
-                if (output_buffer[k].a == compare_buffer[min_pos].a) {
+                if (output_buffer[k].a == compare_buffer[min_pos].a ||
+                    (output_buffer[k].a == last_blk_key && output_buffer_cnt == 0)) {
+//                    printf("Deduplicated\n");
                     flag = 1;
                     break;
                 }
             }
             if (!flag) {
-                output_buffer[output_buffer_cnt++] = compare_buffer[min_pos];
+//                printf("Added!\n");
+                output_buffer[output_buffer_cnt++].a = compare_buffer[min_pos].a;
+                output_buffer[output_buffer_cnt - 1].b = 0;
             }
         } else {
             output_buffer[output_buffer_cnt++] = compare_buffer[min_pos];
@@ -117,6 +127,7 @@ void merge_groups(int start_block_num, int num_groups, int dst_start_block_num, 
         if (output_buffer_cnt == 7) { // Write the buffer back to the disk
             output_buffer_cnt = 0;
             qsort(output_buffer, 7, sizeof(Tuple), cmpTule);
+            last_blk_key = output_buffer[6].a;
             Tuple t;
             t.a = dst_start_block_num + output_blk_cnt + 1;
             t.b = 0;
@@ -127,8 +138,9 @@ void merge_groups(int start_block_num, int num_groups, int dst_start_block_num, 
             }
             writeBlockToDisk((unsigned char **) &output_buffer, dst_start_block_num + output_blk_cnt, buf);
             output_blk_cnt++;
+            printf("Output a new block!\n");
             // get a new output buffer
-            output_buffer = (Tuple *) getNewBlockInBuffer(buf);
+//            output_buffer = (Tuple *) getNewBlockInBuffer(buf);
         }
         // Send a new element to compare buffer
         // Reach the end of the block?
@@ -159,8 +171,12 @@ void merge_groups(int start_block_num, int num_groups, int dst_start_block_num, 
     for (int i = 0; i < num_groups; i++) {
         freeBlockInBuffer((unsigned char *) subset_buffers_ptr[i], buf);
     }
-    freeBlockInBuffer((unsigned char *) output_buffer, buf);
+    if (output_buffer != NULL) {
+        writeBlockToDisk((unsigned char **) &output_buffer, dst_start_block_num + output_blk_cnt, buf);
+        freeBlockInBuffer((unsigned char **) &output_buffer, buf);
+    }
     freeBlockInBuffer((unsigned char *) compare_buffer, buf);
+    return output_blk_cnt;
 }
 
 int makeIndex(int start_block, int num_blocks, int dst_block, Buffer *buf) {
@@ -206,6 +222,7 @@ int locateBlkbyIndex(int search_key, int index_start_num, int num_index_blocks, 
                 break;
             }
         }
+        freeBlockInBuffer(blk, buf);
     }
     return blk_num - 1;
 }
@@ -229,7 +246,9 @@ void searchFromBlock(int value, int start_block, Buffer *buf) {
             }
         }
         current_blk++;
-        freeBlockInBuffer(blk, buf);
+        if (search_flag) {
+            freeBlockInBuffer(blk, buf);
+        }
     }
 }
 
@@ -243,22 +262,28 @@ int main(int argc, char **argv) {
     }
     // Sort the block(8 blocks per group)
     int dest_blk = 100;
-    sort_8_block(1, dest_blk, &buf);
-    sort_8_block(1 + 8, dest_blk + 8, &buf);
-    merge_groups(dest_blk, 2, 200, &buf, 0);
-    dest_blk = 116;
-    sort_8_block(17, dest_blk, &buf);
-    sort_8_block(17 + 8, dest_blk + 8, &buf);
-    sort_8_block(17 + 16, dest_blk + 16, &buf);
-    sort_8_block(17 + 24, dest_blk + 24, &buf);
-    merge_groups(dest_blk, 4, 216, &buf, 0);
+//    sort_8_block(1, dest_blk, &buf);
+//    sort_8_block(1 + 8, dest_blk + 8, &buf);
+//    merge_groups(dest_blk, 2, 200, &buf, 0);
+//    dest_blk = 116;
+//    sort_8_block(17, dest_blk, &buf);
+//    sort_8_block(17 + 8, dest_blk + 8, &buf);
+//    sort_8_block(17 + 16, dest_blk + 16, &buf);
+//    sort_8_block(17 + 24, dest_blk + 24, &buf);
+//    merge_groups(dest_blk, 4, 216, &buf, 0);
 
-    showBlocks(200, 48, &buf);
-    int num_index_blocks;
-    num_index_blocks = makeIndex(200, 16, 300, &buf);
-    showIndex(300, num_index_blocks, &buf);
-    int start_blk;
-    start_blk = locateBlkbyIndex(30, 300, num_index_blocks, &buf);
-    searchFromBlock(30, start_blk, &buf);
+//    showBlocks(200, 48, &buf);
+//    int num_index_blocks;
+//    num_index_blocks = makeIndex(200, 16, 300, &buf);
+//    showIndex(300, num_index_blocks, &buf);
+//
+//    int start_blk;
+//    start_blk = locateBlkbyIndex(30, 300, num_index_blocks, &buf);
+//    searchFromBlock(30, start_blk, &buf);
+
+    int num_deduplicated_blocks;
+    num_deduplicated_blocks = merge_groups(200, 2, 400, &buf, 1);
+    showBlocks(400, num_deduplicated_blocks, &buf);
+
     return 0;
 }
