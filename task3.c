@@ -188,21 +188,25 @@ int join(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int dest_blk_
     int S_blk_cnt = 0;
     int R_pos = 0, R_last_pos = 0;
     int S_pos = 0;
-    int first_Rplace = 1;
     // Read the block into the buffer
     while (1) {
         if (RBuf[R_pos].a > SBuf[S_pos].a) { // Move S Forward
             S_pos++;
-            first_Rplace = 1;
         } else if (RBuf[R_pos].a < SBuf[S_pos].a) {
             R_pos++;
-            first_Rplace = 1;
         } else {
             // 相等
             if (SBuf[S_pos].a == SBuf[S_pos - 1].a) {
                 // 撤回指针
             } else {
                 // 内循环，移动R的指针，往后扫描
+                int pos = R_pos;
+                while (RBuf[pos].a == SBuf[S_pos].a) {
+                    // 输出块
+                }
+                if (S_pos < 6 && SBuf[S_pos + 1].a == SBuf[S_pos + 1].a) {
+                    // 前后两个元素还是相等，不移动指针
+                }
             }
         }
     }
