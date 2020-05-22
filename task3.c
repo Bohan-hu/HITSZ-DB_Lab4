@@ -173,10 +173,39 @@ int merge_groups(int start_block_num, int num_groups, int dst_start_block_num, B
     }
     if (output_buffer != NULL) {
         writeBlockToDisk((unsigned char **) &output_buffer, dst_start_block_num + output_blk_cnt, buf);
-        freeBlockInBuffer((unsigned char **) &output_buffer, buf);
     }
     freeBlockInBuffer((unsigned char *) compare_buffer, buf);
     return output_blk_cnt;
+}
+
+int join(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int dest_blk_num, Buffer *buf) {
+    Tuple *RBuf = (Tuple *) readBlockFromDisk(R_Start, buf);
+    Tuple *SBuf = (Tuple *) readBlockFromDisk(S_Start, buf);
+    Tuple *output_buffer = (Tuple *) getNewBlockInBuffer(buf);
+    int R_cur_blk_num = R_Start;
+    int S_cur_blk_num = S_Start;
+    int R_blk_cnt = 0;
+    int S_blk_cnt = 0;
+    int R_pos = 0, R_last_pos = 0;
+    int S_pos = 0;
+    int first_Rplace = 1;
+    // Read the block into the buffer
+    while (1) {
+        if (RBuf[R_pos].a > SBuf[S_pos].a) { // Move S Forward
+            S_pos++;
+            first_Rplace = 1;
+        } else if (RBuf[R_pos].a < SBuf[S_pos].a) {
+            R_pos++;
+            first_Rplace = 1;
+        } else {
+            // 相等
+            if (SBuf[S_pos].a == SBuf[S_pos - 1].a) {
+                // 撤回指针
+            } else {
+                // 内循环，移动R的指针，往后扫描
+            }
+        }
+    }
 }
 
 int makeIndex(int start_block, int num_blocks, int dst_block, Buffer *buf) {
