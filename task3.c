@@ -178,9 +178,24 @@ int merge_groups(int start_block_num, int num_groups, int dst_start_block_num, B
     return output_blk_cnt;
 }
 
+Tuple getNextElement(int *blk_num, int *next_pos, unsigned char **blk, Buffer *buf) {
+    if (*next_pos < 6) {
+        *next_pos = *next_pos + 1;
+        return getTuple_str(*blk, *next_pos - 1);
+    } else {
+        Tuple ret = getTuple_str(*blk, *next_pos);
+        *next_pos = 0;
+        *blk_num = *blk_num + 1;
+        printf("blk_num = %d\n", *blk_num);
+        freeBlockInBuffer(*blk, buf);
+        *blk = readBlockFromDisk(*blk_num, buf);
+        return ret;
+    }
+}
+
 int join(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int dest_blk_num, Buffer *buf) {
     Tuple *RBuf = (Tuple *) readBlockFromDisk(R_Start, buf);
-    Tuple *SBuf = (Tuple *) readBlockFromDisk(S_Start, buf);
+    Tuple *SBuf;
     Tuple *output_buffer = (Tuple *) getNewBlockInBuffer(buf);
     int R_cur_blk_num = R_Start;
     int S_cur_blk_num = S_Start;
@@ -188,28 +203,31 @@ int join(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int dest_blk_
     int S_blk_cnt = 0;
     int R_pos = 0, R_last_pos = 0;
     int S_pos = 0;
+    int output_buf_cnt = 0;
     // Read the block into the buffer
-    while (1) {
-        if (RBuf[R_pos].a > SBuf[S_pos].a) { // Move S Forward
-            S_pos++;
-        } else if (RBuf[R_pos].a < SBuf[S_pos].a) {
-            R_pos++;
-        } else {
-            // 相等
-            if (SBuf[S_pos].a == SBuf[S_pos - 1].a) {
-                // 撤回指针
+    for (int i = 0; i < num_blks_S; i++) {
+        SBuf = (Tuple *) readBlockFromDisk(S_Start + i, buf);
+        // find the first place where S_i == R_i
+        int R_next_pos = 0;
+        int S_pos = 0;
+        Tuple R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf);
+        Tuple S_Tup = SBuf[S_pos];
+        int joinable = 1;
+        while (S_Tup.a != R_Tup.a) {
+            if (S_Tup.a < R_Tup.a) {
+                S_pos++;
+                if (S_pos == 7) {
+                    joinable = 0;
+                    break;
+                }
+                S_Tup = SBuf[S_pos];
             } else {
-                // 内循环，移动R的指针，往后扫描
-                int pos = R_pos;
-                while (RBuf[pos].a == SBuf[S_pos].a) {
-                    // 输出块
-                }
-                if (S_pos < 6 && SBuf[S_pos + 1].a == SBuf[S_pos + 1].a) {
-                    // 前后两个元素还是相等，不移动指针
-                }
+                R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf);
             }
         }
+        int last_R_pos = R_next_pos - 1;
     }
+
 }
 
 int makeIndex(int start_block, int num_blocks, int dst_block, Buffer *buf) {
@@ -314,9 +332,15 @@ int main(int argc, char **argv) {
 //    start_blk = locateBlkbyIndex(30, 300, num_index_blocks, &buf);
 //    searchFromBlock(30, start_blk, &buf);
 
-    int num_deduplicated_blocks;
-    num_deduplicated_blocks = merge_groups(200, 2, 400, &buf, 1);
-    showBlocks(400, num_deduplicated_blocks, &buf);
-
+//    int num_deduplicated_blocks;
+//    num_deduplicated_blocks = merge_groups(200, 2, 400, &buf, 1);
+//    showBlocks(400, num_deduplicated_blocks, &buf);
+//    int start_blk_num = 100;
+//    int next_pos = 0;
+//    unsigned char * blk = readBlockFromDisk(100, &buf);
+//    for(int i = 0; i<21;i++){
+//        Tuple t = getNextElement(&start_blk_num, &next_pos, &blk, &buf);
+//        printf(("blk %d, %d: %d, %d\n"), start_blk_num, next_pos, t.a, t.b);
+//    }
     return 0;
 }
