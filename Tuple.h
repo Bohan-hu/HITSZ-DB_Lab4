@@ -66,10 +66,6 @@ void convert_blk_2int(Tuple *blk, int nums) {
     }
 }
 
-void setTuple_t(unsigned char *blk, int offset, Tuple t) {
-    *((Tuple *) (blk + 8 * offset)) = t;
-}
-
 void showBlock_str(unsigned char *blk) {
     Tuple t;
     for (int i = 0; i < 8; i++) {
@@ -77,22 +73,4 @@ void showBlock_str(unsigned char *blk) {
         printf("(%d,%d)\n", t.a, t.b);
     }
 }
-
-void showBlock_int(unsigned char *blk) {
-    for (int i = 0; i < 8; i++) {
-        printf("(%d,%d)\n", *(int *) (blk + i * 8), *((int *) (blk + i * 8 + 4)));
-    }
-}
-
-
-void showIndex(int start_blk_num, int num_blocks, Buffer *buf) {
-    unsigned char *blk;
-    for (int i = start_blk_num; i < start_blk_num + num_blocks; i++) {
-        blk = readBlockFromDisk(i, buf);
-        showBlock_int(blk);
-        printf("---------\n");
-        freeBlockInBuffer(blk, buf);
-    }
-}
-
 #endif

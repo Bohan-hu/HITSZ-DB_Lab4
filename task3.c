@@ -206,10 +206,6 @@ join_intersect(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int des
     int R_blk_bk;
     for (int i = 0; i < num_blks_S; i++) {
         SBuf = (Tuple *) readBlockFromDisk(S_Start + i, buf);
-//        for (int offset = 0; offset < 7; offset++) {
-//            setTuple_int((unsigned char *) SBuf, offset,
-//                         getTuple_str((unsigned char *) SBuf, offset));
-//        }
         convert_blk_2int(SBuf, 7);
         // find the first place where S_i == R_i
         int R_next_pos = 0;
@@ -240,19 +236,19 @@ join_intersect(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int des
                                            R_Start + num_blks_R);
                 }
             }
-//            printf("Current S: (%d, %d) @ block %d, offset %d\n", S_Tup.a, S_Tup.b, i + S_Start, S_pos);
 
             R_pos_bk = R_next_pos;
             R_blk_bk = R_cur_blk_num;
             R_Tup_bk = R_Tup;
             // find all the joinable numbers
             while (R_Tup.a == S_Tup.a) {
-                // TODO:Join a and b
                 if (intersect == 1) {
                     if (R_Tup.b == S_Tup.b) {
+                        // TODO:Join a and b
                         printf("Intersect S(%d, %d) R(%d,%d)\n", S_Tup.a, S_Tup.b, R_Tup.a, R_Tup.b);
                     }
                 } else {
+                    // TODO:Join a and b
                     printf("Join S(%d, %d) R(%d,%d)\n", S_Tup.a, S_Tup.b, R_Tup.a, R_Tup.b);
                 }
                 // locate the next R
@@ -274,8 +270,6 @@ join_intersect(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int des
                 RBuf = (Tuple *) readBlockFromDisk(R_cur_blk_num, buf);
                 R_Tup = R_Tup_bk;
             }
-//            printf("\n");
-
         }
         freeBlockInBuffer((unsigned char *) SBuf, buf);
     }
@@ -293,13 +287,6 @@ int makeIndex(int start_block, int num_blocks, int dst_block, Buffer *buf) {
         t.a = getTuple_str(blk, 0).a;
         t.b = blk_cnt;
         output_Tuple(t, &output_blk_cnt, &output_blk_pos, (Tuple **) &output_blk, buf, 0, 1);
-//        output_blk[output_blk_pos++] = t;
-//        if (output_blk_pos == 8) {
-//            // Write back to disk
-//            output_blk_pos = 0;
-//            writeBlockToDisk((unsigned char **) &output_blk, dst_block + output_blk_cnt, buf);
-//            output_blk_cnt++;
-//        }
         freeBlockInBuffer(blk, buf);
     }
     output_Tuple(t, &output_blk_cnt, &output_blk_pos, (Tuple **) &blk, buf, 1, 1);
@@ -377,30 +364,9 @@ int main(int argc, char **argv) {
 //    int start_blk;
 //    start_blk = locateBlkbyIndex(30, 300, num_index_blocks, &buf);
 //    searchFromBlock(30, start_blk, &buf);
-
     int num_deduplicated_blocks;
     num_deduplicated_blocks = merge_groups(100, 2, 4000, &buf, 1);
     showBlocks(4000, num_deduplicated_blocks, &buf);
-
-//    int start_blk_num = 100;
-//    int next_pos = 0;
-//    unsigned char * blk = readBlockFromDisk(100, &buf);
-//    for(int i = 0; i<21;i++){
-//        Tuple t = getNextElement(&start_blk_num, &next_pos, &blk, &buf);
-//        printf(("blk %d, %d: %d, %d\n"), start_blk_num, next_pos, t.a, t.b);
-//    }
 //    join_intersect(200, 16, 217, 32, 500, &buf, 1);
-//    int dst_blk = 800;
-//    int blk_pos = 0;
-//    unsigned char * blk = NULL;
-//    Tuple t;
-//    for(int i = 0; i<22; i++){
-//        t.a = i;
-//        t.b = i+1;
-//        output_Tuple(t, &dst_blk, &blk_pos, (Tuple**)(&blk), &buf, 0);
-//    }
-//    printf("%d blks left in buffer\n", buf.numFreeBlk);
-//    output_Tuple(t, &dst_blk, &blk_pos, (Tuple**)(&blk), &buf, 1);
-
     return 0;
 }
