@@ -193,15 +193,12 @@ Tuple getNextElement(int *blk_num, int *next_pos, unsigned char **blk, Buffer *b
     }
 }
 
-int join(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int dest_blk_num, Buffer *buf) {
+int
+join_intersect(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int dest_blk_num, Buffer *buf, int intersect) {
     Tuple *RBuf = (Tuple *) readBlockFromDisk(R_Start, buf);
     Tuple *SBuf;
     Tuple *output_buffer = (Tuple *) getNewBlockInBuffer(buf);
     int R_cur_blk_num = R_Start;
-    int S_cur_blk_num = S_Start;
-    int R_blk_cnt = 0;
-    int S_blk_cnt = 0;
-    int R_pos = 0, R_last_pos = 0;
     int output_buf_cnt = 0;
     // Read the block into the buffer
     Tuple S_Tup_bk;
@@ -241,18 +238,24 @@ int join(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int dest_blk_
                     R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf);
                 }
             }
-            printf("Current S: (%d, %d) @ block %d, offset %d\n", S_Tup.a, S_Tup.b, i + S_Start, S_pos);
+//            printf("Current S: (%d, %d) @ block %d, offset %d\n", S_Tup.a, S_Tup.b, i + S_Start, S_pos);
 
             int last_R_pos = R_next_pos == 0 ? 6 : R_next_pos - 1;
             int last_R_blk_num = R_next_pos == 0 ? R_cur_blk_num - 1 : R_cur_blk_num;
-            printf("Current R: From blk %d, pos %d\n", last_R_blk_num, last_R_pos);
+//            printf("Current R: From blk %d, pos %d\n", last_R_blk_num, last_R_pos);
             R_pos_bk = R_next_pos;
             R_blk_bk = R_cur_blk_num;
             R_Tup_bk = R_Tup;
             // find all the joinable numbers
             while (R_Tup.a == S_Tup.a) {
                 // TODO:Join a and b
-                printf("Join S(%d, %d) R(%d,%d)\n", S_Tup.a, S_Tup.b, R_Tup.a, R_Tup.b);
+                if (intersect == 1) {
+                    if (R_Tup.b == S_Tup.b) {
+                        printf("Intersect S(%d, %d) R(%d,%d)\n", S_Tup.a, S_Tup.b, R_Tup.a, R_Tup.b);
+                    }
+                } else {
+                    printf("Join S(%d, %d) R(%d,%d)\n", S_Tup.a, S_Tup.b, R_Tup.a, R_Tup.b);
+                }
                 // locate the next R
                 R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf);
             }
@@ -271,7 +274,7 @@ int join(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int dest_blk_
                 RBuf = (Tuple *) readBlockFromDisk(R_cur_blk_num, buf);
                 R_Tup = R_Tup_bk;
             }
-            printf("\n");
+//            printf("\n");
 
         }
         freeBlockInBuffer((unsigned char *) SBuf, buf);
@@ -391,6 +394,7 @@ int main(int argc, char **argv) {
 //        Tuple t = getNextElement(&start_blk_num, &next_pos, &blk, &buf);
 //        printf(("blk %d, %d: %d, %d\n"), start_blk_num, next_pos, t.a, t.b);
 //    }
-    join(200, 16, 217, 32, 500, &buf);
+    join_intersect(200, 16, 217, 32, 500, &buf, 1);
+
     return 0;
 }
