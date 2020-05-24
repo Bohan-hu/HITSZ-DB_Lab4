@@ -204,6 +204,10 @@ int join(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int dest_blk_
     int R_pos = 0, R_last_pos = 0;
     int output_buf_cnt = 0;
     // Read the block into the buffer
+    Tuple S_Tup_bk;
+    Tuple R_Tup_bk;
+    int R_pos_bk;
+    int R_blk_bk;
     for (int i = 0; i < num_blks_S; i++) {
         SBuf = (Tuple *) readBlockFromDisk(S_Start + i, buf);
         for (int offset = 0; offset < 7; offset++) {
@@ -215,6 +219,13 @@ int join(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int dest_blk_
         int S_pos = 0;
         Tuple R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf);
         Tuple S_Tup = SBuf[S_pos];
+        if (i > 0 && S_Tup_bk.a == S_Tup.a) {
+            freeBlockInBuffer((unsigned char *) RBuf, buf);
+            R_cur_blk_num = R_blk_bk;
+            R_next_pos = R_pos_bk;
+            RBuf = (Tuple *) readBlockFromDisk(R_cur_blk_num, buf);
+            R_Tup = R_Tup_bk;
+        }
         while (S_pos < 7) {
             while (S_Tup.a != R_Tup.a) {
                 if (S_Tup.a < R_Tup.a) {
@@ -235,8 +246,33 @@ int join(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int dest_blk_
             int last_R_pos = R_next_pos == 0 ? 6 : R_next_pos - 1;
             int last_R_blk_num = R_next_pos == 0 ? R_cur_blk_num - 1 : R_cur_blk_num;
             printf("Current R: From blk %d, pos %d\n", last_R_blk_num, last_R_pos);
+            R_pos_bk = R_next_pos;
+            R_blk_bk = R_cur_blk_num;
+            R_Tup_bk = R_Tup;
+            // find all the joinable numbers
+            while (R_Tup.a == S_Tup.a) {
+                // TODO:Join a and b
+                printf("Join S(%d, %d) R(%d,%d)\n", S_Tup.a, S_Tup.b, R_Tup.a, R_Tup.b);
+                // locate the next R
+                R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf);
+            }
             S_pos++;
+            if (S_pos == 7) {
+                // Record the former S_pos
+                S_Tup_bk = S_Tup;
+                break;
+            }
             S_Tup = SBuf[S_pos];
+            // 如果相等，则需要撤回R的指针；如果不相等，则不需要
+            if (S_Tup.a == SBuf[S_pos - 1].a) {
+                freeBlockInBuffer((unsigned char *) RBuf, buf);
+                R_cur_blk_num = R_blk_bk;
+                R_next_pos = R_pos_bk;
+                RBuf = (Tuple *) readBlockFromDisk(R_cur_blk_num, buf);
+                R_Tup = R_Tup_bk;
+            }
+            printf("\n");
+
         }
         freeBlockInBuffer((unsigned char *) SBuf, buf);
     }
