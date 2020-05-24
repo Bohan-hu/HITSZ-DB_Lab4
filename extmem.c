@@ -109,7 +109,7 @@ unsigned char *readBlockFromDisk(unsigned int addr, Buffer *buf)
 
     if (!fp)
     {
-        perror("Reading Block Failed!\n");
+        printf("Reading Block Failed at block %d!\n", addr);
         return NULL;
     }
 

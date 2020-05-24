@@ -9,35 +9,43 @@ int cmpTule(const void *p1, const void *p2) {
     return t1.a - t2.a;
 }
 
-Tuple getNextElement(int *blk_num, int *next_pos, unsigned char **blk, Buffer *buf) {   // Iterator
+Tuple getNextElement(int *blk_num, int *next_pos, unsigned char **blk, Buffer *buf, int end_blk_num) {   // Iterator
+    if (*blk_num >= end_blk_num) {
+        Tuple t;
+        t.a = 9999999;
+        return t;
+    }
     if (*next_pos < 6) {
         *next_pos = *next_pos + 1;
-        return getTuple_str(*blk, *next_pos - 1);
+        return getTuple_t(*blk, *next_pos - 1);
     } else {
-        Tuple ret = getTuple_str(*blk, *next_pos);
+        Tuple ret = getTuple_t(*blk, *next_pos);
         *next_pos = 0;
         *blk_num = *blk_num + 1;
         freeBlockInBuffer(*blk, buf);
-        *blk = readBlockFromDisk(*blk_num, buf);
+        *blk = *blk_num < end_blk_num ? readBlockFromDisk(*blk_num, buf) : readBlockFromDisk(*blk_num - 1, buf);
+        convert_blk_2int((Tuple *) *blk, 7);
         return ret;
     }
 }
 
-void output_Tuple(Tuple t, int *output_blk_num, int *next_pos, Tuple **blk, Buffer *buf, int flush) {
-    printf("Outputed %d in function\n", t.a);
+void output_Tuple(Tuple t, int *output_blk_num, int *next_pos, Tuple **blk, Buffer *buf, int flush, int isIndex) {
+    int UPPER = isIndex ? 7 : 6;
     if (*blk == NULL && flush) {
         return;
     }
     if (*blk == NULL && !flush) {
         *blk = (Tuple *) getNewBlockInBuffer(buf);
     }
-    if (*next_pos < 6 && !flush) {
+    if (*next_pos < UPPER && !flush) {
         (*blk)[*next_pos] = t;
         *next_pos = *next_pos + 1;
-    } else if (*next_pos == 6) {
+    } else if (*next_pos == UPPER) {
         (*blk)[*next_pos] = t;
         *next_pos = 0;
-        (*blk)[7].a = *output_blk_num + 1;
+        if (!isIndex) {
+            (*blk)[7].a = *output_blk_num + 1;
+        }
         for (int offset = 0; offset < 8; offset++) {
             setTuple_str((unsigned char *) (*blk), offset,
                          getTuple_t((unsigned char *) (*blk), offset));
@@ -45,8 +53,11 @@ void output_Tuple(Tuple t, int *output_blk_num, int *next_pos, Tuple **blk, Buff
         writeBlockToDisk((unsigned char **) blk, *output_blk_num, buf);
         *output_blk_num = *output_blk_num + 1;
     } else if (flush) {
+        if (*next_pos == 0) return;
         *next_pos = 0;
-        (*blk)[7].a = *output_blk_num + 1;
+        if (isIndex) {
+            (*blk)[7].a = *output_blk_num + 1;
+        }
         for (int offset = 0; offset < 8; offset++) {
             setTuple_str((unsigned char *) (*blk), offset,
                          getTuple_t((unsigned char *) (*blk), offset));
@@ -136,15 +147,12 @@ int merge_groups(int start_block_num, int num_groups, int dst_start_block_num, B
                 min_pos = i;
             }
         }
-        if (compare_buffer[min_pos].a == 99999) {    // Reach the end....
+        if (compare_buffer[min_pos].a == 9999999) {    // Reach the end....
             break;
         }
         if (deduplicate) {
             int flag = 0;
-            printf("Last key = %d, output buffer cnt = %d, selected (%d, %d)\n", last_blk_key, output_buffer_cnt,
-                   compare_buffer[min_pos].a, compare_buffer[min_pos].b);
             if (compare_buffer[min_pos].a == last_blk_key && output_buffer_cnt == 0) {
-                printf("Here");
                 flag = 1;
             }
             // search the output buffer for the same element
@@ -158,50 +166,30 @@ int merge_groups(int start_block_num, int num_groups, int dst_start_block_num, B
                 Tuple output_t;
                 output_t.a = compare_buffer[min_pos].a;
                 output_t.b = 0;
-                output_Tuple(output_t, &output_blk_cnt, &output_buffer_cnt, &output_buffer, buf, 0);
-                printf("Outputed %d\n", output_t.a);
+                output_Tuple(output_t, &output_blk_cnt, &output_buffer_cnt, &output_buffer, buf, 0, 0);
                 if (output_buffer_cnt == 0) {
                     last_blk_key = output_t.a;
                 }
             }
         } else {
-            printf("Select (%d, %d)\n", compare_buffer[min_pos].a, compare_buffer[min_pos].b);
-            output_Tuple(compare_buffer[min_pos], &output_blk_cnt, &output_buffer_cnt, &output_buffer, buf, 0);
+            output_Tuple(compare_buffer[min_pos], &output_blk_cnt, &output_buffer_cnt, &output_buffer, buf, 0, 0);
         }
         // Send a new element to compare buffer
         // Reach the end of the block?
-        if (subset_buffer_read_pos[min_pos] < 7) {
-            compare_buffer[min_pos] = getTuple_t(subset_buffers_ptr[min_pos], subset_buffer_read_pos[min_pos]);
-            subset_buffer_read_pos[min_pos]++;
-        } else {
-            subset_buffer_read_pos[min_pos] = 0;
-            group_read_blk_num[min_pos]++;
-            // See if a new block can be loaded
-            if (group_read_blk_num[min_pos] < group_start_block_num[min_pos + 1]) {
-                // Load a new block
-                freeBlockInBuffer(subset_buffers_ptr[min_pos], buf);
-                subset_buffers_ptr[min_pos] = readBlockFromDisk(group_read_blk_num[min_pos], buf);
-
-                convert_blk_2int((Tuple *) subset_buffers_ptr[min_pos], 7);
-                compare_buffer[min_pos] = getTuple_t(subset_buffers_ptr[min_pos], subset_buffer_read_pos[min_pos]);
-                subset_buffer_read_pos[min_pos]++;
-            } else {
-                // No more blocks
-                compare_buffer[min_pos].a = 99999;
-            }
-        }
+        compare_buffer[min_pos] = getNextElement(&(group_read_blk_num[min_pos]), &(subset_buffer_read_pos[min_pos]),
+                                                 &(subset_buffers_ptr[min_pos]), buf,
+                                                 group_start_block_num[min_pos + 1]);
     }
     // Do the cleanup
     for (int i = 0; i < num_groups; i++) {
         freeBlockInBuffer((unsigned char *) subset_buffers_ptr[i], buf);
     }
     Tuple t;
-    output_Tuple(t, &output_blk_cnt, &output_buffer_cnt, &output_buffer, buf, 1);
+    output_Tuple(t, &output_blk_cnt, &output_buffer_cnt, &output_buffer, buf, 1, 0);
 
     freeBlockInBuffer((unsigned char *) compare_buffer, buf);
     return output_blk_cnt - dst_start_block_num;
 }
-
 
 
 int
@@ -226,7 +214,8 @@ join_intersect(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int des
         // find the first place where S_i == R_i
         int R_next_pos = 0;
         int S_pos = 0;
-        Tuple R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf);
+        Tuple R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf,
+                                     R_Start + num_blks_R);
         Tuple S_Tup = SBuf[S_pos];
         if (i > 0 && S_Tup_bk.a == S_Tup.a) {
             freeBlockInBuffer((unsigned char *) RBuf, buf);
@@ -247,14 +236,12 @@ join_intersect(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int des
                     if (R_next_pos == 0 && R_cur_blk_num > R_Start + num_blks_R) {
                         break;
                     }
-                    R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf);
+                    R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf,
+                                           R_Start + num_blks_R);
                 }
             }
 //            printf("Current S: (%d, %d) @ block %d, offset %d\n", S_Tup.a, S_Tup.b, i + S_Start, S_pos);
 
-            int last_R_pos = R_next_pos == 0 ? 6 : R_next_pos - 1;
-            int last_R_blk_num = R_next_pos == 0 ? R_cur_blk_num - 1 : R_cur_blk_num;
-//            printf("Current R: From blk %d, pos %d\n", last_R_blk_num, last_R_pos);
             R_pos_bk = R_next_pos;
             R_blk_bk = R_cur_blk_num;
             R_Tup_bk = R_Tup;
@@ -269,7 +256,8 @@ join_intersect(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int des
                     printf("Join S(%d, %d) R(%d,%d)\n", S_Tup.a, S_Tup.b, R_Tup.a, R_Tup.b);
                 }
                 // locate the next R
-                R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf);
+                R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf,
+                                       R_Start + num_blks_R);
             }
             S_pos++;
             if (S_pos == 7) {
@@ -298,28 +286,24 @@ int makeIndex(int start_block, int num_blocks, int dst_block, Buffer *buf) {
     unsigned char *blk;
     Tuple *output_blk = (Tuple *) getNewBlockInBuffer(buf);
     int output_blk_pos = 0;
-    int output_blk_cnt = 0;
+    int output_blk_cnt = dst_block;
     Tuple t;
     for (blk_cnt = start_block; blk_cnt < start_block + num_blocks; blk_cnt++) {
-        if (output_blk == NULL) {
-            output_blk = (Tuple *) getNewBlockInBuffer(buf);
-        }
         blk = readBlockFromDisk(blk_cnt, buf);
         t.a = getTuple_str(blk, 0).a;
         t.b = blk_cnt;
-        output_blk[output_blk_pos++] = t;
-        if (output_blk_pos == 8) {
-            // Write back to disk
-            output_blk_pos = 0;
-            writeBlockToDisk((unsigned char **) &output_blk, dst_block + output_blk_cnt, buf);
-            output_blk_cnt++;
-        }
+        output_Tuple(t, &output_blk_cnt, &output_blk_pos, (Tuple **) &output_blk, buf, 0, 1);
+//        output_blk[output_blk_pos++] = t;
+//        if (output_blk_pos == 8) {
+//            // Write back to disk
+//            output_blk_pos = 0;
+//            writeBlockToDisk((unsigned char **) &output_blk, dst_block + output_blk_cnt, buf);
+//            output_blk_cnt++;
+//        }
         freeBlockInBuffer(blk, buf);
     }
-    if (output_blk != NULL) {
-        writeBlockToDisk((unsigned char **) &output_blk, dst_block + output_blk_cnt, buf);
-    }
-    return output_blk_cnt;
+    output_Tuple(t, &output_blk_cnt, &output_blk_pos, (Tuple **) &blk, buf, 1, 1);
+    return output_blk_cnt - dst_block;
 }
 
 int locateBlkbyIndex(int search_key, int index_start_num, int num_index_blocks, Buffer *buf) {
@@ -368,7 +352,6 @@ void searchFromBlock(int value, int start_block, Buffer *buf) {
 
 int main(int argc, char **argv) {
     Buffer buf; /* A buffer */
-    int i = 0;
     /* Initialize the buffer */
     if (!initBuffer(520, 64, &buf)) { // Buffer size=520, blkSize=64
         perror("Buffer Initialization Failed!\n");
@@ -378,19 +361,18 @@ int main(int argc, char **argv) {
     int dest_blk = 100;
     sort_8_block(1, dest_blk, &buf);
     sort_8_block(1 + 8, dest_blk + 8, &buf);
-    showBlocks(100, 16, &buf);
-    merge_groups(dest_blk, 2, 2000, &buf, 0);
-//    dest_blk = 116;
-//    sort_8_block(17, dest_blk, &buf);
-//    sort_8_block(17 + 8, dest_blk + 8, &buf);
-//    sort_8_block(17 + 16, dest_blk + 16, &buf);
-//    sort_8_block(17 + 24, dest_blk + 24, &buf);
-//    merge_groups(dest_blk, 4, 216, &buf, 0);
+    merge_groups(dest_blk, 2, 200, &buf, 0);
+    dest_blk = 116;
+    sort_8_block(17, dest_blk, &buf);
+    sort_8_block(17 + 8, dest_blk + 8, &buf);
+    sort_8_block(17 + 16, dest_blk + 16, &buf);
+    sort_8_block(17 + 24, dest_blk + 24, &buf);
+    merge_groups(dest_blk, 4, 216, &buf, 0);
 
-    showBlocks(2000, 16, &buf);
+//    showBlocks(200, 48, &buf);
 //    int num_index_blocks;
 //    num_index_blocks = makeIndex(200, 16, 300, &buf);
-//    showIndex(300, num_index_blocks, &buf);
+//    showBlocks(300, num_index_blocks, &buf);
 //
 //    int start_blk;
 //    start_blk = locateBlkbyIndex(30, 300, num_index_blocks, &buf);
