@@ -9,6 +9,43 @@ int cmpTule(const void *p1, const void *p2) {
     return t1.a - t2.a;
 }
 
+Tuple getNextElement(int *blk_num, int *next_pos, unsigned char **blk, Buffer *buf) {   // Iterator
+    if (*next_pos < 6) {
+        *next_pos = *next_pos + 1;
+        return getTuple_str(*blk, *next_pos - 1);
+    } else {
+        Tuple ret = getTuple_str(*blk, *next_pos);
+        *next_pos = 0;
+        *blk_num = *blk_num + 1;
+        freeBlockInBuffer(*blk, buf);
+        *blk = readBlockFromDisk(*blk_num, buf);
+        return ret;
+    }
+}
+
+void output_Tuple(Tuple t, int *output_blk_num, int *next_pos, Tuple **blk, Buffer *buf, int flush) {
+    if (*blk == NULL && flush) {
+        return;
+    }
+    if (*blk == NULL && !flush) {
+        *blk = (Tuple *) getNewBlockInBuffer(buf);
+    }
+    if (*next_pos < 6 && !flush) {
+        (*blk)[*next_pos] = t;
+        *next_pos = *next_pos + 1;
+    } else {
+        (*blk)[*next_pos] = t;
+        *next_pos = 0;
+        (*blk)[7].a = *output_blk_num + 1;
+        for (int offset = 0; offset < 8; offset++) {
+            setTuple_str((unsigned char *) (*blk), offset,
+                         getTuple_t((unsigned char *) (*blk), offset));
+        }
+        writeBlockToDisk((unsigned char **) blk, *output_blk_num, buf);
+        *output_blk_num = *output_blk_num + 1;
+    }
+}
+
 void showBlocks(int start, int nums, Buffer *buf) {
     int blk_cnt;
     unsigned char *blk;
@@ -26,10 +63,7 @@ int sort_8_block(int block_num, int dst_block_num, Buffer *buf) {
     for (int i = 0; i < 8; i++) {
         blk[i] = readBlockFromDisk(block_num + i, buf);
         Tuple t;
-        for (int j = 0; j < 7; j++) {
-            t = getTuple_str(blk[i], j);
-            setTuple_int(blk[i], j, t);
-        }
+        convert_blk_2int((Tuple *) blk[i], 7);
     }
 
     Tuple temp[56];
@@ -80,9 +114,10 @@ int merge_groups(int start_block_num, int num_groups, int dst_start_block_num, B
             return -1;
         }
         // Convert the string to int
-        for (int offset = 0; offset < 7; offset++) {
-            setTuple_int(subset_buffers_ptr[i], offset, getTuple_str(subset_buffers_ptr[i], offset));
-        }
+//        for (int offset = 0; offset < 7; offset++) {
+//            setTuple_int(subset_buffers_ptr[i], offset, getTuple_str(subset_buffers_ptr[i], offset));
+//        }
+        convert_blk_2int((Tuple *) subset_buffers_ptr[i], 7);
         compare_buffer[i] = getTuple_t(subset_buffers_ptr[i], subset_buffer_read_pos[i]++);
     }
 
@@ -155,10 +190,8 @@ int merge_groups(int start_block_num, int num_groups, int dst_start_block_num, B
                 // Load a new block
                 freeBlockInBuffer(subset_buffers_ptr[min_pos], buf);
                 subset_buffers_ptr[min_pos] = readBlockFromDisk(group_read_blk_num[min_pos], buf);
-                for (int offset = 0; offset < 7; offset++) {
-                    setTuple_int(subset_buffers_ptr[min_pos], offset,
-                                 getTuple_str(subset_buffers_ptr[min_pos], offset));
-                }
+
+                convert_blk_2int((Tuple *) subset_buffers_ptr[min_pos], 7);
                 compare_buffer[min_pos] = getTuple_t(subset_buffers_ptr[min_pos], subset_buffer_read_pos[min_pos]);
                 subset_buffer_read_pos[min_pos]++;
             } else {
@@ -178,20 +211,7 @@ int merge_groups(int start_block_num, int num_groups, int dst_start_block_num, B
     return output_blk_cnt;
 }
 
-Tuple getNextElement(int *blk_num, int *next_pos, unsigned char **blk, Buffer *buf) {
-    if (*next_pos < 6) {
-        *next_pos = *next_pos + 1;
-        return getTuple_str(*blk, *next_pos - 1);
-    } else {
-        Tuple ret = getTuple_str(*blk, *next_pos);
-        *next_pos = 0;
-        *blk_num = *blk_num + 1;
-//        printf("blk_num = %d\n", *blk_num);
-        freeBlockInBuffer(*blk, buf);
-        *blk = readBlockFromDisk(*blk_num, buf);
-        return ret;
-    }
-}
+
 
 int
 join_intersect(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int dest_blk_num, Buffer *buf, int intersect) {
@@ -207,10 +227,11 @@ join_intersect(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int des
     int R_blk_bk;
     for (int i = 0; i < num_blks_S; i++) {
         SBuf = (Tuple *) readBlockFromDisk(S_Start + i, buf);
-        for (int offset = 0; offset < 7; offset++) {
-            setTuple_int((unsigned char *) SBuf, offset,
-                         getTuple_str((unsigned char *) SBuf, offset));
-        }
+//        for (int offset = 0; offset < 7; offset++) {
+//            setTuple_int((unsigned char *) SBuf, offset,
+//                         getTuple_str((unsigned char *) SBuf, offset));
+//        }
+        convert_blk_2int(SBuf, 7);
         // find the first place where S_i == R_i
         int R_next_pos = 0;
         int S_pos = 0;
@@ -364,9 +385,9 @@ int main(int argc, char **argv) {
     }
     // Sort the block(8 blocks per group)
     int dest_blk = 100;
-//    sort_8_block(1, dest_blk, &buf);
-//    sort_8_block(1 + 8, dest_blk + 8, &buf);
-//    merge_groups(dest_blk, 2, 200, &buf, 0);
+    sort_8_block(1, dest_blk, &buf);
+    sort_8_block(1 + 8, dest_blk + 8, &buf);
+    merge_groups(dest_blk, 2, 200, &buf, 0);
 //    dest_blk = 116;
 //    sort_8_block(17, dest_blk, &buf);
 //    sort_8_block(17 + 8, dest_blk + 8, &buf);
@@ -374,7 +395,7 @@ int main(int argc, char **argv) {
 //    sort_8_block(17 + 24, dest_blk + 24, &buf);
 //    merge_groups(dest_blk, 4, 216, &buf, 0);
 
-//    showBlocks(200, 48, &buf);
+    showBlocks(200, 16, &buf);
 //    int num_index_blocks;
 //    num_index_blocks = makeIndex(200, 16, 300, &buf);
 //    showIndex(300, num_index_blocks, &buf);
@@ -394,7 +415,18 @@ int main(int argc, char **argv) {
 //        Tuple t = getNextElement(&start_blk_num, &next_pos, &blk, &buf);
 //        printf(("blk %d, %d: %d, %d\n"), start_blk_num, next_pos, t.a, t.b);
 //    }
-    join_intersect(200, 16, 217, 32, 500, &buf, 1);
+//    join_intersect(200, 16, 217, 32, 500, &buf, 1);
+//    int dst_blk = 800;
+//    int blk_pos = 0;
+//    unsigned char * blk = NULL;
+//    Tuple t;
+//    for(int i = 0; i<22; i++){
+//        t.a = i;
+//        t.b = i+1;
+//        output_Tuple(t, &dst_blk, &blk_pos, (Tuple**)(&blk), &buf, 0);
+//    }
+//    printf("%d blks left in buffer\n", buf.numFreeBlk);
+//    output_Tuple(t, &dst_blk, &blk_pos, (Tuple**)(&blk), &buf, 1);
 
     return 0;
 }
