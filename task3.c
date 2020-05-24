@@ -186,7 +186,7 @@ Tuple getNextElement(int *blk_num, int *next_pos, unsigned char **blk, Buffer *b
         Tuple ret = getTuple_str(*blk, *next_pos);
         *next_pos = 0;
         *blk_num = *blk_num + 1;
-        printf("blk_num = %d\n", *blk_num);
+//        printf("blk_num = %d\n", *blk_num);
         freeBlockInBuffer(*blk, buf);
         *blk = readBlockFromDisk(*blk_num, buf);
         return ret;
@@ -202,32 +202,44 @@ int join(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int dest_blk_
     int R_blk_cnt = 0;
     int S_blk_cnt = 0;
     int R_pos = 0, R_last_pos = 0;
-    int S_pos = 0;
     int output_buf_cnt = 0;
     // Read the block into the buffer
     for (int i = 0; i < num_blks_S; i++) {
         SBuf = (Tuple *) readBlockFromDisk(S_Start + i, buf);
+        for (int offset = 0; offset < 7; offset++) {
+            setTuple_int((unsigned char *) SBuf, offset,
+                         getTuple_str((unsigned char *) SBuf, offset));
+        }
         // find the first place where S_i == R_i
         int R_next_pos = 0;
         int S_pos = 0;
         Tuple R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf);
         Tuple S_Tup = SBuf[S_pos];
-        int joinable = 1;
-        while (S_Tup.a != R_Tup.a) {
-            if (S_Tup.a < R_Tup.a) {
-                S_pos++;
-                if (S_pos == 7) {
-                    joinable = 0;
-                    break;
+        while (S_pos < 7) {
+            while (S_Tup.a != R_Tup.a) {
+                if (S_Tup.a < R_Tup.a) {
+                    S_pos++;
+                    if (S_pos == 7) {
+                        break;
+                    }
+                    S_Tup = SBuf[S_pos];
+                } else {
+                    if (R_next_pos == 0 && R_cur_blk_num > R_Start + num_blks_R) {
+                        break;
+                    }
+                    R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf);
                 }
-                S_Tup = SBuf[S_pos];
-            } else {
-                R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf);
             }
-        }
-        int last_R_pos = R_next_pos - 1;
-    }
+            printf("Current S: (%d, %d) @ block %d, offset %d\n", S_Tup.a, S_Tup.b, i + S_Start, S_pos);
 
+            int last_R_pos = R_next_pos == 0 ? 6 : R_next_pos - 1;
+            int last_R_blk_num = R_next_pos == 0 ? R_cur_blk_num - 1 : R_cur_blk_num;
+            printf("Current R: From blk %d, pos %d\n", last_R_blk_num, last_R_pos);
+            S_pos++;
+            S_Tup = SBuf[S_pos];
+        }
+        freeBlockInBuffer((unsigned char *) SBuf, buf);
+    }
 }
 
 int makeIndex(int start_block, int num_blocks, int dst_block, Buffer *buf) {
@@ -334,7 +346,8 @@ int main(int argc, char **argv) {
 
 //    int num_deduplicated_blocks;
 //    num_deduplicated_blocks = merge_groups(200, 2, 400, &buf, 1);
-//    showBlocks(400, num_deduplicated_blocks, &buf);
+//    showBlocks(200, 48, &buf);
+
 //    int start_blk_num = 100;
 //    int next_pos = 0;
 //    unsigned char * blk = readBlockFromDisk(100, &buf);
@@ -342,5 +355,6 @@ int main(int argc, char **argv) {
 //        Tuple t = getNextElement(&start_blk_num, &next_pos, &blk, &buf);
 //        printf(("blk %d, %d: %d, %d\n"), start_blk_num, next_pos, t.a, t.b);
 //    }
+    join(200, 16, 217, 32, 500, &buf);
     return 0;
 }
