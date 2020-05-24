@@ -24,6 +24,7 @@ Tuple getNextElement(int *blk_num, int *next_pos, unsigned char **blk, Buffer *b
 }
 
 void output_Tuple(Tuple t, int *output_blk_num, int *next_pos, Tuple **blk, Buffer *buf, int flush) {
+    printf("Outputed %d in function\n", t.a);
     if (*blk == NULL && flush) {
         return;
     }
@@ -33,8 +34,17 @@ void output_Tuple(Tuple t, int *output_blk_num, int *next_pos, Tuple **blk, Buff
     if (*next_pos < 6 && !flush) {
         (*blk)[*next_pos] = t;
         *next_pos = *next_pos + 1;
-    } else {
+    } else if (*next_pos == 6) {
         (*blk)[*next_pos] = t;
+        *next_pos = 0;
+        (*blk)[7].a = *output_blk_num + 1;
+        for (int offset = 0; offset < 8; offset++) {
+            setTuple_str((unsigned char *) (*blk), offset,
+                         getTuple_t((unsigned char *) (*blk), offset));
+        }
+        writeBlockToDisk((unsigned char **) blk, *output_blk_num, buf);
+        *output_blk_num = *output_blk_num + 1;
+    } else if (flush) {
         *next_pos = 0;
         (*blk)[7].a = *output_blk_num + 1;
         for (int offset = 0; offset < 8; offset++) {
@@ -99,7 +109,7 @@ int merge_groups(int start_block_num, int num_groups, int dst_start_block_num, B
     int output_buffer_cnt = 0;
     int *subset_buffer_read_pos = malloc(sizeof(int) * num_groups);       // 组对应缓冲区的读指针
     int *group_read_blk_num = malloc(sizeof(int) * num_groups);           // 组读到的块号
-    int output_blk_cnt = 0;
+    int output_blk_cnt = dst_start_block_num;
     for (int i = 0; i < num_groups; i++) {
         group_read_blk_num[i] = group_start_block_num[i];
         subset_buffer_read_pos[i] = 0;
@@ -113,13 +123,10 @@ int merge_groups(int start_block_num, int num_groups, int dst_start_block_num, B
             perror("Error reading block!");
             return -1;
         }
-        // Convert the string to int
-//        for (int offset = 0; offset < 7; offset++) {
-//            setTuple_int(subset_buffers_ptr[i], offset, getTuple_str(subset_buffers_ptr[i], offset));
-//        }
         convert_blk_2int((Tuple *) subset_buffers_ptr[i], 7);
         compare_buffer[i] = getTuple_t(subset_buffers_ptr[i], subset_buffer_read_pos[i]++);
     }
+    int last_blk_key;
 
     while (1) {
         // Find the min pos
@@ -129,53 +136,37 @@ int merge_groups(int start_block_num, int num_groups, int dst_start_block_num, B
                 min_pos = i;
             }
         }
-//        printf("Select from group %d, ", min_pos);
-//        printf("(%d, %d)\n", compare_buffer[min_pos].a, compare_buffer[min_pos].b);
         if (compare_buffer[min_pos].a == 99999) {    // Reach the end....
             break;
         }
-        // Send the element at the min_pos to output buffer
-        if (output_buffer == NULL) {
-            output_buffer = (Tuple *) getNewBlockInBuffer(buf);
-        }
-        int last_blk_key;
         if (deduplicate) {
             int flag = 0;
+            printf("Last key = %d, output buffer cnt = %d, selected (%d, %d)\n", last_blk_key, output_buffer_cnt,
+                   compare_buffer[min_pos].a, compare_buffer[min_pos].b);
+            if (compare_buffer[min_pos].a == last_blk_key && output_buffer_cnt == 0) {
+                printf("Here");
+                flag = 1;
+            }
             // search the output buffer for the same element
             for (int k = 0; k < output_buffer_cnt; k++) {
-                if (output_buffer[k].a == compare_buffer[min_pos].a ||
-                    (output_buffer[k].a == last_blk_key && output_buffer_cnt == 0)) {
-//                    printf("Deduplicated\n");
+                if (output_buffer[k].a == compare_buffer[min_pos].a) {
                     flag = 1;
                     break;
                 }
             }
             if (!flag) {
-//                printf("Added!\n");
-                output_buffer[output_buffer_cnt++].a = compare_buffer[min_pos].a;
-                output_buffer[output_buffer_cnt - 1].b = 0;
+                Tuple output_t;
+                output_t.a = compare_buffer[min_pos].a;
+                output_t.b = 0;
+                output_Tuple(output_t, &output_blk_cnt, &output_buffer_cnt, &output_buffer, buf, 0);
+                printf("Outputed %d\n", output_t.a);
+                if (output_buffer_cnt == 0) {
+                    last_blk_key = output_t.a;
+                }
             }
         } else {
-            output_buffer[output_buffer_cnt++] = compare_buffer[min_pos];
-        }
-        // Output buffer is full?
-        if (output_buffer_cnt == 7) { // Write the buffer back to the disk
-            output_buffer_cnt = 0;
-            qsort(output_buffer, 7, sizeof(Tuple), cmpTule);
-            last_blk_key = output_buffer[6].a;
-            Tuple t;
-            t.a = dst_start_block_num + output_blk_cnt + 1;
-            t.b = 0;
-            output_buffer[7] = t;
-            for (int offset = 0; offset < 8; offset++) {
-                setTuple_str((unsigned char *) output_buffer, offset,
-                             getTuple_t((unsigned char *) output_buffer, offset));
-            }
-            writeBlockToDisk((unsigned char **) &output_buffer, dst_start_block_num + output_blk_cnt, buf);
-            output_blk_cnt++;
-            printf("Output a new block!\n");
-            // get a new output buffer
-//            output_buffer = (Tuple *) getNewBlockInBuffer(buf);
+            printf("Select (%d, %d)\n", compare_buffer[min_pos].a, compare_buffer[min_pos].b);
+            output_Tuple(compare_buffer[min_pos], &output_blk_cnt, &output_buffer_cnt, &output_buffer, buf, 0);
         }
         // Send a new element to compare buffer
         // Reach the end of the block?
@@ -204,11 +195,11 @@ int merge_groups(int start_block_num, int num_groups, int dst_start_block_num, B
     for (int i = 0; i < num_groups; i++) {
         freeBlockInBuffer((unsigned char *) subset_buffers_ptr[i], buf);
     }
-    if (output_buffer != NULL) {
-        writeBlockToDisk((unsigned char **) &output_buffer, dst_start_block_num + output_blk_cnt, buf);
-    }
+    Tuple t;
+    output_Tuple(t, &output_blk_cnt, &output_buffer_cnt, &output_buffer, buf, 1);
+
     freeBlockInBuffer((unsigned char *) compare_buffer, buf);
-    return output_blk_cnt;
+    return output_blk_cnt - dst_start_block_num;
 }
 
 
@@ -387,7 +378,8 @@ int main(int argc, char **argv) {
     int dest_blk = 100;
     sort_8_block(1, dest_blk, &buf);
     sort_8_block(1 + 8, dest_blk + 8, &buf);
-    merge_groups(dest_blk, 2, 200, &buf, 0);
+    showBlocks(100, 16, &buf);
+    merge_groups(dest_blk, 2, 2000, &buf, 0);
 //    dest_blk = 116;
 //    sort_8_block(17, dest_blk, &buf);
 //    sort_8_block(17 + 8, dest_blk + 8, &buf);
@@ -395,7 +387,7 @@ int main(int argc, char **argv) {
 //    sort_8_block(17 + 24, dest_blk + 24, &buf);
 //    merge_groups(dest_blk, 4, 216, &buf, 0);
 
-    showBlocks(200, 16, &buf);
+    showBlocks(2000, 16, &buf);
 //    int num_index_blocks;
 //    num_index_blocks = makeIndex(200, 16, 300, &buf);
 //    showIndex(300, num_index_blocks, &buf);
@@ -404,9 +396,9 @@ int main(int argc, char **argv) {
 //    start_blk = locateBlkbyIndex(30, 300, num_index_blocks, &buf);
 //    searchFromBlock(30, start_blk, &buf);
 
-//    int num_deduplicated_blocks;
-//    num_deduplicated_blocks = merge_groups(200, 2, 400, &buf, 1);
-//    showBlocks(200, 48, &buf);
+    int num_deduplicated_blocks;
+    num_deduplicated_blocks = merge_groups(100, 2, 4000, &buf, 1);
+    showBlocks(4000, num_deduplicated_blocks, &buf);
 
 //    int start_blk_num = 100;
 //    int next_pos = 0;
