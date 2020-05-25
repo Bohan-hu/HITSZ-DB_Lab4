@@ -24,6 +24,7 @@ Tuple getNextElement(int *blk_num, int *next_pos, unsigned char **blk, Buffer *b
         *blk_num = *blk_num + 1;
         freeBlockInBuffer(*blk, buf);
         *blk = *blk_num < end_blk_num ? readBlockFromDisk(*blk_num, buf) : readBlockFromDisk(*blk_num - 1, buf);
+        if (*blk_num < end_blk_num) printf("读入数据块%d\n", *blk_num);
         convert_blk_2int((Tuple *) *blk, 7);
         return ret;
     }
@@ -191,6 +192,34 @@ int merge_groups(int start_block_num, int num_groups, int dst_start_block_num, B
     return output_blk_cnt - dst_start_block_num;
 }
 
+int deduplicate(int start_block, int num_blks, int output_blk, Buffer *buf) {
+    int start_pos = 0;
+    int output_pos = 0;
+    int output_blk_bk = output_blk;
+    unsigned char *output_blk_ptr = getNewBlockInBuffer(buf);
+    unsigned char *blk = readBlockFromDisk(start_block, buf);
+    convert_blk_2int((Tuple *) blk, 7);
+    printf("读入数据块%d\n", start_block);
+    Tuple t, last_t;
+    last_t.a = 99999;
+    int end_block = start_block + num_blks;
+    int cnt = 0;
+    while (start_block < end_block) {
+        t = getNextElement(&start_block, &start_pos, &blk, buf, end_block);
+        if (t.a != last_t.a) {
+            printf("(X = %d)\n", t.a);
+            t.b = 0;
+            output_Tuple(t, &output_blk, &output_pos, (Tuple **) &output_blk_ptr, buf, 0, 0);
+            last_t = t;
+            cnt++;
+        }
+    }
+    freeBlockInBuffer(blk, buf);
+    output_Tuple(t, &output_blk, &output_pos, (Tuple **) &blk, buf, 1, 0);
+    printf("注：结果写入磁盘：%d\n", output_blk_bk);
+    printf("关系R上的A属性满足投影（去重）的属性值一共有%d个\n", cnt);
+}
+
 
 int
 join_intersect(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int dest_blk_num, Buffer *buf, int intersect) {
@@ -337,6 +366,24 @@ void searchFromBlock(int value, int start_block, Buffer *buf) {
     }
 }
 
+void linearSearch(int start_block, int end_block, int key, int output_blk, Buffer *buf) {
+    int start_pos = 0;
+    int output_pos = 0;
+    int output_blk_bk = output_blk;
+    unsigned char *blk = readBlockFromDisk(start_block, buf);
+    unsigned char *output_blk_ptr = getNewBlockInBuffer(buf);
+    convert_blk_2int((Tuple *) blk, 7);
+    Tuple t;
+    while (start_block < end_block + 1) {
+        t = getNextElement(&start_block, &start_pos, &blk, buf, end_block + 1);
+        if (t.a == key) {
+            output_Tuple(t, &output_blk, &output_pos, (Tuple **) &output_blk_ptr, buf, 0, 0);
+        }
+    }
+//    output_Tuple(t, &output_blk, &output_pos, (Tuple **)&output_blk_ptr, buf, 1,0);
+    printf("注：结果写入磁盘：%d\n", output_blk_bk);
+}
+
 int main(int argc, char **argv) {
     Buffer buf; /* A buffer */
     /* Initialize the buffer */
@@ -344,29 +391,34 @@ int main(int argc, char **argv) {
         perror("Buffer Initialization Failed!\n");
         return -1;
     }
+//    linearSearch(1, 16, 23, 100, &buf);
+//    printf("IO读写一共 %d 次\n", buf.numIO);
+//    showBlocks(100,1,&buf);
     // Sort the block(8 blocks per group)
-    int dest_blk = 100;
-    sort_8_block(1, dest_blk, &buf);
-    sort_8_block(1 + 8, dest_blk + 8, &buf);
-    merge_groups(dest_blk, 2, 200, &buf, 0);
-    dest_blk = 116;
-    sort_8_block(17, dest_blk, &buf);
-    sort_8_block(17 + 8, dest_blk + 8, &buf);
-    sort_8_block(17 + 16, dest_blk + 16, &buf);
-    sort_8_block(17 + 24, dest_blk + 24, &buf);
-    merge_groups(dest_blk, 4, 216, &buf, 0);
 
-//    showBlocks(200, 48, &buf);
-//    int num_index_blocks;
-//    num_index_blocks = makeIndex(200, 16, 300, &buf);
-//    showBlocks(300, num_index_blocks, &buf);
+//    sort_8_block(1, 200, &buf);
+//    sort_8_block(1 + 8, 200 + 8, &buf);
+//    merge_groups(200, 2, 301, &buf, 0);
 //
+//    sort_8_block(17, 200, &buf);
+//    sort_8_block(17 + 8, 200 + 8, &buf);
+//    sort_8_block(17 + 16, 200 + 16, &buf);
+//    sort_8_block(17 + 24, 200 + 24, &buf);
+//    merge_groups(200, 4, 317, &buf, 0);
+//
+//    showBlocks(301, 48, &buf);
+
+//    int num_index_blocks;
+//    num_index_blocks = makeIndex(301, 16, 400, &buf);
+//    showBlocks(400, num_index_blocks, &buf);
+
 //    int start_blk;
 //    start_blk = locateBlkbyIndex(30, 300, num_index_blocks, &buf);
 //    searchFromBlock(30, start_blk, &buf);
-    int num_deduplicated_blocks;
-    num_deduplicated_blocks = merge_groups(100, 2, 4000, &buf, 1);
-    showBlocks(4000, num_deduplicated_blocks, &buf);
+//    int num_deduplicated_blocks;
+//    num_deduplicated_blocks = merge_groups(200, 2, 4000, &buf, 1);
+    deduplicate(301, 16, 4000, &buf);
+//    showBlocks(4000, num_deduplicated_blocks, &buf);
 //    join_intersect(200, 16, 217, 32, 500, &buf, 1);
     return 0;
 }

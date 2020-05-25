@@ -48,13 +48,6 @@ void setTuple_str(unsigned char *blk, int offset, Tuple t) {
     int2str(blk + 8 * offset + 4, t.b);
 }
 
-void convert_blk_2str(Tuple *blk, int nums) {
-    for (int offset = 0; offset < nums; offset++) {
-        setTuple_str((unsigned char *) (blk), offset,
-                     getTuple_t((unsigned char *) (blk), offset));
-    }
-}
-
 void setTuple_int(unsigned char *blk, int offset, Tuple t) {
     *(int *) (blk + 8 * offset) = t.a;
     *(int *) (blk + 8 * offset + 4) = t.b;
