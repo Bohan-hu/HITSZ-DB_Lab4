@@ -26,6 +26,7 @@ Tuple getNextElement(int *blk_num, int *next_pos, unsigned char **blk, Buffer *b
         *blk = *blk_num < end_blk_num ? readBlockFromDisk(*blk_num, buf) : readBlockFromDisk(*blk_num - 1, buf);
         if (*blk_num < end_blk_num) printf("读入数据块%d\n", *blk_num);
         convert_blk_2int((Tuple *) *blk, 7);
+
         return ret;
     }
 }
@@ -52,6 +53,7 @@ void output_Tuple(Tuple t, int *output_blk_num, int *next_pos, Tuple **blk, Buff
                          getTuple_t((unsigned char *) (*blk), offset));
         }
         writeBlockToDisk((unsigned char **) blk, *output_blk_num, buf);
+        printf("注：结果写入磁盘%d\n", *output_blk_num);
         *output_blk_num = *output_blk_num + 1;
     } else if (flush) {
         if (*next_pos == 0) return;
@@ -64,6 +66,7 @@ void output_Tuple(Tuple t, int *output_blk_num, int *next_pos, Tuple **blk, Buff
                          getTuple_t((unsigned char *) (*blk), offset));
         }
         writeBlockToDisk((unsigned char **) blk, *output_blk_num, buf);
+        printf("注：结果写入磁盘%d\n", *output_blk_num);
         *output_blk_num = *output_blk_num + 1;
     }
 }
@@ -216,14 +219,16 @@ int deduplicate(int start_block, int num_blks, int output_blk, Buffer *buf) {
     }
     freeBlockInBuffer(blk, buf);
     output_Tuple(t, &output_blk, &output_pos, (Tuple **) &blk, buf, 1, 0);
-    printf("注：结果写入磁盘：%d\n", output_blk_bk);
+//    printf("注：结果写入磁盘：%d，写入了%d个块\n", output_blk_bk,output_blk - output_blk_bk);
     printf("关系R上的A属性满足投影（去重）的属性值一共有%d个\n", cnt);
+    return output_blk - output_blk_bk;
 }
 
 
 int
 join_intersect(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int dest_blk_num, Buffer *buf, int intersect) {
     Tuple *RBuf = (Tuple *) readBlockFromDisk(R_Start, buf);
+    convert_blk_2int(RBuf, 7);
     Tuple *SBuf;
     Tuple *output_buffer = (Tuple *) getNewBlockInBuffer(buf);
     int R_cur_blk_num = R_Start;
@@ -233,20 +238,25 @@ join_intersect(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int des
     Tuple R_Tup_bk;
     int R_pos_bk;
     int R_blk_bk;
+    int R_End = R_Start + num_blks_R;
+    int S_End = S_Start + num_blks_S;
+    int cnt = 1;
     for (int i = 0; i < num_blks_S; i++) {
         SBuf = (Tuple *) readBlockFromDisk(S_Start + i, buf);
         convert_blk_2int(SBuf, 7);
         // find the first place where S_i == R_i
         int R_next_pos = 0;
         int S_pos = 0;
-        Tuple R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf,
-                                     R_Start + num_blks_R);
+        Tuple R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf, R_End);
+//        printf("R_current_block = %d, R_next_ois = %d\n", R_cur_blk_num, R_next_pos);
+//        printf("R.A = %d, R.B=%d\n", R_Tup.a, R_Tup.b);
         Tuple S_Tup = SBuf[S_pos];
         if (i > 0 && S_Tup_bk.a == S_Tup.a) {
             freeBlockInBuffer((unsigned char *) RBuf, buf);
             R_cur_blk_num = R_blk_bk;
             R_next_pos = R_pos_bk;
             RBuf = (Tuple *) readBlockFromDisk(R_cur_blk_num, buf);
+            convert_blk_2int(RBuf, 7);
             R_Tup = R_Tup_bk;
         }
         while (S_pos < 7) {
@@ -261,11 +271,13 @@ join_intersect(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int des
                     if (R_next_pos == 0 && R_cur_blk_num > R_Start + num_blks_R) {
                         break;
                     }
-                    R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf,
-                                           R_Start + num_blks_R);
+                    R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf, R_End);
                 }
             }
+//            printf("Current S: (%d, %d) @ block %d, offset %d\n", S_Tup.a, S_Tup.b, i + S_Start, S_pos);
 
+            int last_R_pos = R_next_pos == 0 ? 6 : R_next_pos - 1;
+            int last_R_blk_num = R_next_pos == 0 ? R_cur_blk_num - 1 : R_cur_blk_num;
             R_pos_bk = R_next_pos;
             R_blk_bk = R_cur_blk_num;
             R_Tup_bk = R_Tup;
@@ -273,16 +285,17 @@ join_intersect(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int des
             while (R_Tup.a == S_Tup.a) {
                 if (intersect == 1) {
                     if (R_Tup.b == S_Tup.b) {
-                        // TODO:Join a and b
+                        output_Tuple(R_Tup, &dest_blk_num, &output_buf_cnt, &output_buffer, buf, 0, 0);
                         printf("Intersect S(%d, %d) R(%d,%d)\n", S_Tup.a, S_Tup.b, R_Tup.a, R_Tup.b);
                     }
                 } else {
-                    // TODO:Join a and b
-                    printf("Join S(%d, %d) R(%d,%d)\n", S_Tup.a, S_Tup.b, R_Tup.a, R_Tup.b);
+                    output_Tuple(R_Tup, &dest_blk_num, &output_buf_cnt, &output_buffer, buf, 0, 0);
+                    output_Tuple(S_Tup, &dest_blk_num, &output_buf_cnt, &output_buffer, buf, 0, 0);
+//                    printf("Join S(%d, %d) R(%d,%d)\n", S_Tup.a, S_Tup.b, R_Tup.a, R_Tup.b);
+                    cnt++;
                 }
                 // locate the next R
-                R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf,
-                                       R_Start + num_blks_R);
+                R_Tup = getNextElement(&R_cur_blk_num, &R_next_pos, (unsigned char **) (&RBuf), buf, R_End);
             }
             S_pos++;
             if (S_pos == 7) {
@@ -297,11 +310,16 @@ join_intersect(int R_Start, int num_blks_R, int S_Start, int num_blks_S, int des
                 R_cur_blk_num = R_blk_bk;
                 R_next_pos = R_pos_bk;
                 RBuf = (Tuple *) readBlockFromDisk(R_cur_blk_num, buf);
+                convert_blk_2int(RBuf, 7);
                 R_Tup = R_Tup_bk;
             }
         }
         freeBlockInBuffer((unsigned char *) SBuf, buf);
     }
+    Tuple t;
+    output_Tuple(t, &dest_blk_num, &output_buf_cnt, &output_buffer, buf, 1, 0);
+    if (!intersect) printf("连接次数：%d\n", cnt);
+
 }
 
 int makeIndex(int start_block, int num_blocks, int dst_block, Buffer *buf) {
@@ -366,7 +384,7 @@ void searchFromBlock(int value, int start_block, Buffer *buf) {
     }
 }
 
-void linearSearch(int start_block, int end_block, int key, int output_blk, Buffer *buf) {
+int linearSearch(int start_block, int end_block, int key, int output_blk, Buffer *buf) {
     int start_pos = 0;
     int output_pos = 0;
     int output_blk_bk = output_blk;
@@ -381,7 +399,8 @@ void linearSearch(int start_block, int end_block, int key, int output_blk, Buffe
         }
     }
 //    output_Tuple(t, &output_blk, &output_pos, (Tuple **)&output_blk_ptr, buf, 1,0);
-    printf("注：结果写入磁盘：%d\n", output_blk_bk);
+    printf("注：结果写入磁盘：%d，写入了%d个块\n", output_blk_bk, output_blk - output_blk_bk);
+    return output_blk - output_blk_bk;
 }
 
 int main(int argc, char **argv) {
@@ -394,7 +413,7 @@ int main(int argc, char **argv) {
 //    linearSearch(1, 16, 23, 100, &buf);
 //    printf("IO读写一共 %d 次\n", buf.numIO);
 //    showBlocks(100,1,&buf);
-    // Sort the block(8 blocks per group)
+//     Sort the block(8 blocks per group)
 
 //    sort_8_block(1, 200, &buf);
 //    sort_8_block(1 + 8, 200 + 8, &buf);
@@ -405,7 +424,6 @@ int main(int argc, char **argv) {
 //    sort_8_block(17 + 16, 200 + 16, &buf);
 //    sort_8_block(17 + 24, 200 + 24, &buf);
 //    merge_groups(200, 4, 317, &buf, 0);
-//
 //    showBlocks(301, 48, &buf);
 
 //    int num_index_blocks;
@@ -415,10 +433,11 @@ int main(int argc, char **argv) {
 //    int start_blk;
 //    start_blk = locateBlkbyIndex(30, 300, num_index_blocks, &buf);
 //    searchFromBlock(30, start_blk, &buf);
-//    int num_deduplicated_blocks;
-//    num_deduplicated_blocks = merge_groups(200, 2, 4000, &buf, 1);
-    deduplicate(301, 16, 4000, &buf);
-//    showBlocks(4000, num_deduplicated_blocks, &buf);
-//    join_intersect(200, 16, 217, 32, 500, &buf, 1);
+    int num_deduplicated_blocks;
+//    num_deduplicated_blocks = merge_groups(200, 2, 350, &buf, 1);
+//    deduplicate(301, 16, 4000, &buf);
+//    showBlocks(350, num_deduplicated_blocks, &buf);
+    join_intersect(301, 16, 317, 32, 401, &buf, 0);
+    join_intersect(301, 16, 317, 32, 501, &buf, 1);
     return 0;
 }

@@ -19,25 +19,25 @@ void int2str(unsigned char *dst, int a) {
     }
 }
 
-int str2int(unsigned char* src){
+int str2int(unsigned char *src) {
     char str[5];
-    str[4]=0;
+    str[4] = 0;
     for (int k = 0; k < 4; k++) {
-        str[k] = *(src+k);
+        str[k] = *(src + k);
     }
     return atoi(str);
 }
 
-Tuple getTuple_str(unsigned char* blk, int tuple_num){
+Tuple getTuple_str(unsigned char *blk, int tuple_num) {
     Tuple t;
-    t.a = str2int(blk+tuple_num*8);
-    t.b = str2int(blk+tuple_num*8+4);
+    t.a = str2int(blk + tuple_num * 8);
+    t.b = str2int(blk + tuple_num * 8 + 4);
     return t;
 }
 
-Tuple getTuple_t(unsigned char* blk, int tuple_num){
+Tuple getTuple_t(unsigned char *blk, int tuple_num) {
     Tuple t;
-    t.a = *((int*)(blk+tuple_num*8));
+    t.a = *((int *) (blk + tuple_num * 8));
     t.b = *((int *) (blk + tuple_num * 8 + 4));
     return t;
 }
@@ -66,4 +66,5 @@ void showBlock_str(unsigned char *blk) {
         printf("(%d,%d)\n", t.a, t.b);
     }
 }
+
 #endif
